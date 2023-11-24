@@ -83,7 +83,7 @@ class DataHandler():
                 squares_desc_tr = np.sum(descs_dic_tr[c, i]**2, axis=1)
                 dist = np.sqrt(squares_desc_tr[:, np.newaxis] + squares_centers[np.newaxis, :] - 2*np.dot(descs_dic_tr[c, i], vocab.T)) #(len(kpt) of a image, len(centers))
                 assignments = np.argmin(dist, axis=1) # len(kpt)
-                hist, _ = np.histogram(assignments, bins=np.arange(1, self.n_centers+2)) # len(vocab)
+                hist, _ = np.histogram(assignments, bins=np.arange(0, self.n_centers+1)) # len(vocab)
                 histogram_tr[self.class_list.index(c)*len(img_idx_tr[c]) + img_idx_tr[c].index(i), :] += hist
         histogram_tr = histogram_tr / np.sum(histogram_tr, axis=1)[:, np.newaxis] # (#data, #centers)
         print("Shape of histogram_tr: ", histogram_tr.shape, "= (# of data, # of words)")
