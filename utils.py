@@ -8,27 +8,32 @@ import shutil
 
 class DataHandler():
     
-    def __init__(self, img_sel, vocab_size):
-        self.root = "/Users/dongyoonhahm/KAIST/CS485/cw2/RF_code/Caltech_101/101_ObjectCategories"
-        self.img_sel = img_sel
+    def __init__(self, root):
+        self.root = root
         self.class_list = None
         self.img_list = None
         
-        self.n_centers = vocab_size
+        self.vocab_size = 0
         self.img_idx_tr = None
-        self.histogram_tr = None
         self.img_idx_te = None
+        
+        self.descs_dic_tr = None
+        self.descs_tr = None
+        self.descs_dic_te = None
+        self.descs_te = None
+        
+        self.histogram_tr = None
         self.histogram_te = None
     
-    def load_data(self):
+    def sift(self, img_sel=[15, 15]):
+        ### initialize
+        self.img_sel = img_sel
         class_list = [d for d in os.listdir(self.root) if os.path.isdir(os.path.join(self.root, d))]
         self.class_list = class_list
         img_list = {}
-        
         descs_dic_tr = {}
         descs_tr = None # total desc of train set
         img_idx_tr = {}
-        
         descs_dic_te = {}
         descs_te = None # total desc of test set
         img_idx_te = {}
@@ -68,36 +73,56 @@ class DataHandler():
                     descs_te = np.concatenate((descs_te, desc), axis=0)
                 else:
                     descs_te = desc
+                    
+        self.img_list = img_list
+        self.img_idx_tr = img_idx_tr
+        self.img_idx_te = img_idx_te
+        self.descs_dic_tr = descs_dic_tr
+        self.descs_tr = descs_tr
+        self.descs_dic_te = descs_dic_te
+        self.descs_te = descs_te
+
+        
+    def kmeans_codebook(self, vocab_size=64):
+        ### load variables
+        self.vocab_size = vocab_size
+        img_list = self.img_list
+        img_idx_tr = self.img_idx_tr
+        img_idx_te = self.img_idx_te
+        descs_tr = self.descs_tr
+        descs_dic_tr = self.descs_dic_tr
+        descs_te = self.descs_te
+        descs_dic_te = self.descs_dic_te
         
         ### voabulary construction
         print("Clustering...")  
-        kmeans = KMeans(n_clusters=self.n_centers, random_state=0, n_init=5).fit(descs_tr)
+        kmeans = KMeans(n_clusters=self.vocab_size, random_state=0, n_init=5).fit(descs_tr)
         vocab = kmeans.cluster_centers_
-        print("Shape of vocab: ", vocab.shape)
+        print("Shape of vocab: ", vocab.shape, "(vocab_size, 128)")
         squares_centers = np.sum(vocab**2, axis=1)
         
+        ### histogram construction of train set
         print("Contructing histogram for train set...")  
-        ##### train set
-        histogram_tr = np.zeros((len(self.class_list)*self.img_sel[0], self.n_centers))
+        histogram_tr = np.zeros((len(self.class_list)*self.img_sel[0], self.vocab_size))
         for c in self.class_list:
             for i in img_idx_tr[c]:
                 squares_desc_tr = np.sum(descs_dic_tr[c, i]**2, axis=1)
                 dist = np.sqrt(squares_desc_tr[:, np.newaxis] + squares_centers[np.newaxis, :] - 2*np.dot(descs_dic_tr[c, i], vocab.T)) #(len(kpt) of a image, len(centers))
                 assignments = np.argmin(dist, axis=1) # len(kpt)
-                hist, _ = np.histogram(assignments, bins=np.arange(0, self.n_centers+1)) # len(vocab)
+                hist, _ = np.histogram(assignments, bins=np.arange(0, self.vocab_size+1)) # len(vocab)
                 histogram_tr[self.class_list.index(c)*len(img_idx_tr[c]) + img_idx_tr[c].index(i), :] += hist
         histogram_tr = histogram_tr / np.sum(histogram_tr, axis=1)[:, np.newaxis] # (#data, #centers)
         print("Shape of histogram_tr: ", histogram_tr.shape, "= (# of data, # of words)")
         
-        ##### test set
+        ### histogram construction of test set
         print("Contructing histogram for test set...")  
-        histogram_te = np.zeros((len(self.class_list)*self.img_sel[1], self.n_centers))
+        histogram_te = np.zeros((len(self.class_list)*self.img_sel[1], self.vocab_size))
         for c in self.class_list:
             for i in img_idx_te[c]:
                 squares_desc_te = np.sum(descs_dic_te[c, i]**2, axis=1)
                 dist = np.sqrt(squares_desc_te[:, np.newaxis] + squares_centers[np.newaxis, :] - 2*np.dot(descs_dic_te[c, i], vocab.T)) #(len(kpt), len(centers))
                 assignments = np.argmin(dist, axis=1) # len(kpt)
-                hist, _ = np.histogram(assignments, bins=np.arange(1, self.n_centers+2)) # len(vocab)
+                hist, _ = np.histogram(assignments, bins=np.arange(1, self.vocab_size+2)) # len(vocab)
                 histogram_te[self.class_list.index(c)*len(img_idx_te[c]) + img_idx_te[c].index(i), :] += hist
         histogram_te = histogram_te / np.sum(histogram_te, axis=1)[:, np.newaxis] # (#data, #centers)
         print("Shape of histogram_te: ", histogram_te.shape, "= (# of data, # of words)")
@@ -110,13 +135,23 @@ class DataHandler():
             label_te[(i-1) * self.img_sel[1]: i * self.img_sel[1]] = i
             
         ### save variables
-        self.img_list = img_list
-        self.img_idx_tr = img_idx_tr
         self.histogram_tr = histogram_tr
-        self.img_idx_te = img_idx_te
         self.histogram_te = histogram_te
             
         return histogram_tr, label_tr, histogram_te, label_te
+    
+    def RF_codebook(self, vocab_size=64):
+        ### load variables
+        self.vocab_size = vocab_size
+        img_list = self.img_list
+        img_idx_tr = self.img_idx_tr
+        img_idx_te = self.img_idx_te
+        descs_tr = self.descs_tr
+        descs_dic_tr = self.descs_dic_tr
+        descs_te = self.descs_te
+        descs_dic_te = self.descs_dic_te
+        pass
+        
     
     def visualization(self, train=True, cls='water_lilly', idx=0):
         # Setting up the figure with 2 subplots
@@ -142,7 +177,7 @@ class DataHandler():
         ax1.axis('off')  # To hide axis ticks and labels
 
         # Plot the histogram 
-        ax2.bar(range(self.n_centers), histogram[hist_idx])
+        ax2.bar(range(self.vocab_size), histogram[hist_idx])
         ax2.set_title(f"Histogram of {title}")
         ax2.set_xlabel('Visual Word Index')
         ax2.set_ylabel('Frequency')
