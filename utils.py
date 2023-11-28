@@ -3,6 +3,7 @@ import cv2 as cv
 import numpy as np
 import random
 from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 import shutil
 
@@ -19,8 +20,10 @@ class DataHandler():
         
         self.descs_dic_tr = None
         self.descs_tr = None
+        self.descs_tr_label = None
         self.descs_dic_te = None
         self.descs_te = None
+        self.descs_te_label = None
         
         self.histogram_tr = None
         self.histogram_te = None
@@ -33,9 +36,11 @@ class DataHandler():
         img_list = {}
         descs_dic_tr = {}
         descs_tr = None # total desc of train set
+        descs_tr_label = []
         img_idx_tr = {}
         descs_dic_te = {}
         descs_te = None # total desc of test set
+        descs_te_label = []
         img_idx_te = {}
         
         ### apply sift
@@ -60,6 +65,7 @@ class DataHandler():
                     descs_tr = np.concatenate((descs_tr, desc), axis=0)
                 else:
                     descs_tr = desc
+                descs_tr_label.append(c)
             ##### test set
             for i in img_idx_te[c]:
                 img_path = os.path.join(sub_folder_name, img_list[c][i])
@@ -73,14 +79,17 @@ class DataHandler():
                     descs_te = np.concatenate((descs_te, desc), axis=0)
                 else:
                     descs_te = desc
+                descs_te_label.append(c)
                     
         self.img_list = img_list
         self.img_idx_tr = img_idx_tr
         self.img_idx_te = img_idx_te
         self.descs_dic_tr = descs_dic_tr
         self.descs_tr = descs_tr
+        self.descs_tr_label = descs_tr_label
         self.descs_dic_te = descs_dic_te
         self.descs_te = descs_te
+        self.descs_te_label = descs_te_label
 
         
     def kmeans_codebook(self, vocab_size=64):
@@ -147,10 +156,14 @@ class DataHandler():
         img_idx_tr = self.img_idx_tr
         img_idx_te = self.img_idx_te
         descs_tr = self.descs_tr
+        descs_tr_label = self.descs_tr_label
         descs_dic_tr = self.descs_dic_tr
         descs_te = self.descs_te
         descs_dic_te = self.descs_dic_te
-        pass
+        descs_te_label = self.descs_te_label
+        
+        rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+        rf_classifier.fit(descs_tr, descs_tr_label)
         
     
     def visualization(self, train=True, cls='water_lilly', idx=0):
