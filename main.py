@@ -7,7 +7,7 @@ from vectorQuantization import VectorQuantization
 
 def main():
     root = "./RF_code/Caltech_101/101_ObjectCategories"
-
+    codebook_path = "./"
     vq = VectorQuantization(root)
     vq.fit_codebook()
     vq.save_codebook()

@@ -162,14 +162,14 @@ class VectorQuantization:
 
         self.vocab = np.load(codebook_path)
 
-    def save_codebook(self, export_dir):
+    def save_codebook(self, export_path="./codebook.npy"):
         if self.vocab is None:
             print(
                 "Codebook is not constructed. Please run construct_kmeans_codebook()."
             )
             return
 
-        np.save(os.path.join(export_dir, "codebook.npy"), self.vocab)
+        np.save(export_path, self.vocab)
 
     def fit_codebook(self, vocab_size=200, total_descriptors=100000):
         # check if the data is loaded
@@ -231,6 +231,26 @@ class VectorQuantization:
 
         self.histogram_train = np.concatenate(self.histogram_train, axis=0)
         print("Constructed histogram of train set. Shape: ", self.histogram_train.shape)
+
+    def encode_image(self, image_paths):
+        """
+        Encode an image to a histogram.
+
+        Args:
+            image_paths (list): List of image paths.
+
+        Returns:
+            histogram (np.ndarray): The histogram of the image. shape of (vocab_size,).
+
+        """
+        hists = []
+        for image_path in image_paths:
+            descriptor = self.get_descriptor(image_path)
+            histogram = self.construct_histogram(descriptor)
+            hists.append(histogram)
+
+        hists = np.concatenate(hists, axis=0)
+        return hists
 
     def get_descriptor(self, image_path):
         if os.path.exists(image_path):
