@@ -45,6 +45,14 @@ class DataHandler:
         self.train_labels_list = None
         self.test_labels_list = None
 
+        ############# codebook #############
+        self.vocab_size = 0
+        self.vocab = None  # VISUAL WORDS. shape (vocab_size, 128)
+
+        ############# SIFT #############
+        self.sift = cv.SIFT_create()
+        ############# histogram #############
+
     def load_data(self, data_dir):
         """
         1. Load the dataset from the given directory.
@@ -170,7 +178,7 @@ class DataHandler:
         self.vocab_size = vocab_size
         self.construct_kmeans_codebook(vocab_size, descriptors)
 
-    def construct_train_histogram(self):
+    def construct_train_histograms(self):
         """
         Construct histogram of train set.
         """
@@ -182,6 +190,23 @@ class DataHandler:
             return
 
         print("Constructing histogram of train set...")
+        self.histogram_train = []
+        for image in self.train_images_list:
+            image_path = os.path.join(self.data_dir, image)
+            descriptor = self.get_descriptor(image_path)
+            histogram = self.construct_histogram(descriptor)
+            self.histogram_train.append(histogram)
+
+        self.histogram_train = np.concatenate(self.histogram_train, axis=0)
+        print("Constructed histogram of train set. Shape: ", self.histogram_train.shape)
+
+    def get_descriptor(self, image_path):
+        if os.path.exists(image_path):
+            image = cv.imread(image_path)
+            if image.shape[2] == 3:
+                image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+            _, desc = self.sift.detectAndCompute(image, None)
+            return desc
 
     def sift(self, img_sel=[15, 15]):
         ### initialize
@@ -294,7 +319,7 @@ class DataHandler:
         Assigns the nearest codeword for each descriptor.
 
         Args:
-            desc (np.array): The descriptor of an image. shape of (num_of_desc, 128). The return shape is also determined by the shape of desc.
+            descriptors (np.array): The descriptor of an image. shape of (num_of_desc, 128). The return shape is also determined by the shape of desc.
 
         Returns:
             codeword (np.array): The codeword of the descriptor. shape of (num_of_desc, vocab_size)
@@ -306,13 +331,13 @@ class DataHandler:
             )
             return
 
-        if desc.shape[1] != 128:
+        if descriptors.shape[1] != 128:
             print("Invalid shape of descriptor.")
             return
-        if desc.ndim == 2:
-            distances_to_codewords = np.linalg.norm(desc - self.vocab, axis=1)
-            codeword = np.zeros((desc.shape[0], self.vocab_size))
-            for i in range(desc.shape[0]):
+        if descriptors.ndim == 2:
+            distances_to_codewords = np.linalg.norm(descriptors - self.vocab, axis=1)
+            codeword = np.zeros((descriptors.shape[0], self.vocab_size))
+            for i in range(descriptors.shape[0]):
                 codeword[i, np.argmin(distances_to_codewords[i])] = 1
 
         return codeword
