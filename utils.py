@@ -136,6 +136,38 @@ class DataHandler:
             "The codebook is constructed. You can use it with 'self.vocab' attribute."
         )
 
+    def assign_kmeans_codeword(self, desc):
+        """
+        Assigns the nearest codeword for each descriptor.
+
+        Args:
+            desc (np.array): The descriptor of an image. shape of (128,) or (num_of_desc, 128). The return shape is also determined by the shape of desc.
+
+        Returns:
+            codeword (np.array): The codeword of the descriptor. shape of (vocab_size,) or (num_of_desc, vocab_size).
+        """
+
+        if self.vocab is None:
+            print(
+                "Codebook is not constructed. Please run construct_kmeans_codebook()."
+            )
+            return
+
+        if desc.ndim == 1:
+            desc = desc[np.newaxis, :]
+            distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
+            nearest_codeword = np.argmin(distances_to_centers)
+            codeword = np.zeros(self.vocab_size)
+            codeword[nearest_codeword] = 1
+        else:
+            distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
+            nearest_codeword = np.argmin(distances_to_centers, axis=1)
+            codeword = np.zeros((desc.shape[0], self.vocab_size))
+            for i in range(desc.shape[0]):
+                codeword[i, nearest_codeword[i]] = 1
+
+        return codeword
+
     def kmeans_codebook(self, vocab_size=64):
         """
         Creates a codebook using KMeans clustering and the SIFT descriptors of the training set.
