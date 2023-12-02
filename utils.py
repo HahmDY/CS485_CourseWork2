@@ -18,7 +18,7 @@ class DataHandler:
         self.img_idx_train = None
         self.img_idx_test = None
 
-        self.descs_dic_train = None
+        self.descs_dic_train = None  # VISUAL Descriptors
         self.descs_train = None
         self.descs_train_label = None
         self.descs_dic_test = None
@@ -38,15 +38,23 @@ class DataHandler:
         ]
         self.class_list = class_list
 
-        img_list = {}
-        descs_dic_train = {}
+        img_list = {}  # The total list of images
+        descs_dic_train = (
+            {}
+        )  # The dictionary of descriptors of train set. key: (class, img_idx), value: descriptors.
         descs_train = None  # total desc of train set
-        descs_train_label = []
-        img_idx_train = {}
-        descs_dic_test = {}
+        descs_train_label = []  # total label of train set
+        img_idx_train = (
+            {}
+        )  # The dictionary of image index of train set. key: class, value: image index
+        descs_dic_test = (
+            {}
+        )  # The dictionary of descriptors of test set. key: (class, img_idx), value: descriptors.
         descs_test = None  # total desc of test set
-        descs_test_label = []
-        img_idx_test = {}
+        descs_test_label = []  # total label of test set
+        img_idx_test = (
+            {}
+        )  # The dictionary of image index of test set. key: class, value: image index
 
         ### apply sift
         print("SIFT...")
@@ -66,8 +74,14 @@ class DataHandler:
                 if image.shape[2] == 3:
                     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
                 sift = cv.SIFT_create()
-                _, desc = sift.detectAndCompute(image, None)
-                descs_dic_train[c, i] = desc
+                # detectAndCompute Documentation: https://docs.opencv.org/3.4/d0/d13/classcv_1_1Feature2D.html#a8be0d1c20b08eb867184b8d74c15a677
+                _, desc = sift.detectAndCompute(
+                    image, None
+                )  # return type: keypoints, descriptors
+
+                descs_dic_train[
+                    c, i
+                ] = desc  # key: (class, img_idx), value: descriptors.
                 if descs_train is not None:
                     descs_train = np.concatenate((descs_train, desc), axis=0)
                 else:
