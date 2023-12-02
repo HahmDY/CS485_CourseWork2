@@ -15,15 +15,15 @@ class DataHandler:
         self.img_list = None
 
         self.vocab_size = 0
-        self.img_idx_tr = None
-        self.img_idx_te = None
+        self.img_idx_train = None
+        self.img_idx_test = None
 
-        self.descs_dic_tr = None
-        self.descs_tr = None
-        self.descs_tr_label = None
-        self.descs_dic_te = None
-        self.descs_te = None
-        self.descs_te_label = None
+        self.descs_dic_train = None
+        self.descs_train = None
+        self.descs_train_label = None
+        self.descs_dic_test = None
+        self.descs_test = None
+        self.descs_test_label = None
 
         self.histogram_tr = None
         self.histogram_te = None
@@ -37,15 +37,16 @@ class DataHandler:
             if os.path.isdir(os.path.join(self.root, d))
         ]
         self.class_list = class_list
+
         img_list = {}
-        descs_dic_tr = {}
-        descs_tr = None  # total desc of train set
-        descs_tr_label = []
-        img_idx_tr = {}
-        descs_dic_te = {}
-        descs_te = None  # total desc of test set
-        descs_te_label = []
-        img_idx_te = {}
+        descs_dic_train = {}
+        descs_train = None  # total desc of train set
+        descs_train_label = []
+        img_idx_train = {}
+        descs_dic_test = {}
+        descs_test = None  # total desc of test set
+        descs_test_label = []
+        img_idx_test = {}
 
         ### apply sift
         print("SIFT...")
@@ -55,68 +56,68 @@ class DataHandler:
                 img for img in os.listdir(sub_folder_name) if img.endswith(".jpg")
             ]
             img_idx = random.sample(range(len(img_list[c])), sum(self.img_sel))
-            img_idx_tr[c] = img_idx[: self.img_sel[0]]
-            img_idx_te[c] = img_idx[self.img_sel[0] : sum(self.img_sel)]
+            img_idx_train[c] = img_idx[: self.img_sel[0]]
+            img_idx_test[c] = img_idx[self.img_sel[0] : sum(self.img_sel)]
 
             ##### train set
-            for i in img_idx_tr[c]:
+            for i in img_idx_train[c]:
                 img_path = os.path.join(sub_folder_name, img_list[c][i])
                 image = cv.imread(img_path)
                 if image.shape[2] == 3:
                     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
                 sift = cv.SIFT_create()
                 _, desc = sift.detectAndCompute(image, None)
-                descs_dic_tr[c, i] = desc
-                if descs_tr is not None:
-                    descs_tr = np.concatenate((descs_tr, desc), axis=0)
+                descs_dic_train[c, i] = desc
+                if descs_train is not None:
+                    descs_train = np.concatenate((descs_train, desc), axis=0)
                 else:
-                    descs_tr = desc
-                descs_tr_label.append(c)
+                    descs_train = desc
+                descs_train_label.append(c)
             ##### test set
-            for i in img_idx_te[c]:
+            for i in img_idx_test[c]:
                 img_path = os.path.join(sub_folder_name, img_list[c][i])
                 image = cv.imread(img_path)
                 if image.shape[2] == 3:
                     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
                 sift = cv.SIFT_create()
                 _, desc = sift.detectAndCompute(image, None)
-                descs_dic_te[c, i] = desc
-                if descs_te is not None:
-                    descs_te = np.concatenate((descs_te, desc), axis=0)
+                descs_dic_test[c, i] = desc
+                if descs_test is not None:
+                    descs_test = np.concatenate((descs_test, desc), axis=0)
                 else:
-                    descs_te = desc
-                descs_te_label.append(c)
+                    descs_test = desc
+                descs_test_label.append(c)
 
         self.img_list = img_list
-        self.img_idx_tr = img_idx_tr
-        self.img_idx_te = img_idx_te
-        self.descs_dic_tr = descs_dic_tr
-        self.descs_tr = descs_tr
-        self.descs_tr_label = descs_tr_label
-        self.descs_dic_te = descs_dic_te
-        self.descs_te = descs_te
-        self.descs_te_label = descs_te_label
+        self.img_idx_train = img_idx_train
+        self.img_idx_test = img_idx_test
+        self.descs_dic_train = descs_dic_train
+        self.descs_train = descs_train
+        self.descs_train_label = descs_train_label
+        self.descs_dic_test = descs_dic_test
+        self.descs_test = descs_test
+        self.descs_test_label = descs_test_label
 
     def kmeans_codebook(self, vocab_size=64):
         ### load variables
         self.vocab_size = vocab_size
         img_list = self.img_list
-        img_idx_tr = self.img_idx_tr
-        img_idx_te = self.img_idx_te
-        descs_tr = self.descs_tr
-        descs_dic_tr = self.descs_dic_tr
-        descs_te = self.descs_te
-        descs_dic_te = self.descs_dic_te
+        img_idx_train = self.img_idx_train
+        img_idx_test = self.img_idx_test
+        descs_train = self.descs_train
+        descs_dic_train = self.descs_dic_train
+        descs_test = self.descs_test
+        descs_dic_test = self.descs_dic_test
 
         ### voabulary construction
         print("Clustering...")
         kmeans = KMeans(n_clusters=self.vocab_size, random_state=0, n_init=5).fit(
-            descs_tr
+            descs_train
         )
         # Error here
         """
         놀랍게도 main.py로 실행하니깐 오류가 안 남...
-        
+
             File ~/anaconda3/envs/ml4cv/lib/python3.11/site-packages/sklearn/base.py:1151, in _fit_context.<locals>.decorator.<locals>.wrapper(estimator, *args, **kwargs)
             1144     estimator._validate_params()
             1146 with config_context(
@@ -145,20 +146,20 @@ class DataHandler:
             (len(self.class_list) * self.img_sel[0], self.vocab_size)
         )
         for c in self.class_list:
-            for i in img_idx_tr[c]:
-                squares_desc_tr = np.sum(descs_dic_tr[c, i] ** 2, axis=1)
+            for i in img_idx_train[c]:
+                squares_desc_tr = np.sum(descs_dic_train[c, i] ** 2, axis=1)
                 dist = np.sqrt(
                     squares_desc_tr[:, np.newaxis]
                     + squares_centers[np.newaxis, :]
-                    - 2 * np.dot(descs_dic_tr[c, i], vocab.T)
+                    - 2 * np.dot(descs_dic_train[c, i], vocab.T)
                 )  # (len(kpt) of a image, len(centers))
                 assignments = np.argmin(dist, axis=1)  # len(kpt)
                 hist, _ = np.histogram(
                     assignments, bins=np.arange(0, self.vocab_size + 1)
                 )  # len(vocab)
                 histogram_tr[
-                    self.class_list.index(c) * len(img_idx_tr[c])
-                    + img_idx_tr[c].index(i),
+                    self.class_list.index(c) * len(img_idx_train[c])
+                    + img_idx_train[c].index(i),
                     :,
                 ] += hist
         histogram_tr = (
@@ -174,20 +175,20 @@ class DataHandler:
             (len(self.class_list) * self.img_sel[1], self.vocab_size)
         )
         for c in self.class_list:
-            for i in img_idx_te[c]:
-                squares_desc_te = np.sum(descs_dic_te[c, i] ** 2, axis=1)
+            for i in img_idx_test[c]:
+                squares_desc_te = np.sum(descs_dic_test[c, i] ** 2, axis=1)
                 dist = np.sqrt(
                     squares_desc_te[:, np.newaxis]
                     + squares_centers[np.newaxis, :]
-                    - 2 * np.dot(descs_dic_te[c, i], vocab.T)
+                    - 2 * np.dot(descs_dic_test[c, i], vocab.T)
                 )  # (len(kpt), len(centers))
                 assignments = np.argmin(dist, axis=1)  # len(kpt)
                 hist, _ = np.histogram(
                     assignments, bins=np.arange(1, self.vocab_size + 2)
                 )  # len(vocab)
                 histogram_te[
-                    self.class_list.index(c) * len(img_idx_te[c])
-                    + img_idx_te[c].index(i),
+                    self.class_list.index(c) * len(img_idx_test[c])
+                    + img_idx_test[c].index(i),
                     :,
                 ] += hist
         histogram_te = (
@@ -214,17 +215,17 @@ class DataHandler:
         ### load variables
         self.vocab_size = vocab_size
         img_list = self.img_list
-        img_idx_tr = self.img_idx_tr
-        img_idx_te = self.img_idx_te
-        descs_tr = self.descs_tr
-        descs_tr_label = self.descs_tr_label
-        descs_dic_tr = self.descs_dic_tr
-        descs_te = self.descs_te
-        descs_dic_te = self.descs_dic_te
-        descs_te_label = self.descs_te_label
+        img_idx_train = self.img_idx_train
+        img_idx_test = self.img_idx_test
+        descs_train = self.descs_train
+        descs_train_label = self.descs_train_label
+        descs_dic_train = self.descs_dic_train
+        descs_test = self.descs_test
+        descs_dic_test = self.descs_dic_test
+        descs_test_label = self.descs_test_label
 
         rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
-        rf_classifier.fit(descs_tr, descs_tr_label)
+        rf_classifier.fit(descs_train, descs_train_label)
 
     def visualization(self, train=True, cls="water_lilly", idx=0):
         # Setting up the figure with 2 subplots
@@ -234,11 +235,11 @@ class DataHandler:
 
         # get index of image and histogram
         if train:
-            img_idx = self.img_idx_tr[cls][idx]
+            img_idx = self.img_idx_train[cls][idx]
             hist_idx = self.class_list.index(cls) * self.img_sel[0] + img_idx
             histogram = self.histogram_tr
         else:
-            img_idx = self.img_idx_te[cls][idx]
+            img_idx = self.img_idx_test[cls][idx]
             hist_idx = self.class_list.index(cls) * self.img_sel[1] + img_idx
             histogram = self.histogram_te
 
