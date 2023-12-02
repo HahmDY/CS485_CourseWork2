@@ -161,6 +161,7 @@ class VectorQuantization:
             return
 
         self.vocab = np.load(codebook_path)
+        self.vocab_size = self.vocab.shape[0]
 
     def save_codebook(self, export_path="./codebook.npy"):
         if self.vocab is None:
@@ -176,6 +177,7 @@ class VectorQuantization:
         if self.class_list is None:
             print("Data is not loaded. Please run load_data() first.")
             return
+        self.vocab_size = vocab_size
 
         # compute SIFT descriptors. Due to the memory issues, limit the total number of descriptors to total_descriptor (100,000 default).
         print("Start computing SIFT descriptors...")
@@ -224,13 +226,36 @@ class VectorQuantization:
         print("Constructing histogram of train set...")
         self.histogram_train = []
         for image in self.train_images_list:
-            image_path = os.path.join(self.data_dir, image)
+            image_path = os.path.join(image)
             descriptor = self.get_descriptor(image_path)
             histogram = self.construct_histogram(descriptor)
             self.histogram_train.append(histogram)
 
-        self.histogram_train = np.concatenate(self.histogram_train, axis=0)
+        self.histogram_train = np.stack(self.histogram_train, axis=0)
         print("Constructed histogram of train set. Shape: ", self.histogram_train.shape)
+        return self.histogram_train
+
+    def construct_test_histograms(self):
+        """
+        Construct histogram of test set.
+        """
+
+        if self.vocab is None:
+            print(
+                "Codebook is not constructed. Please run construct_kmeans_codebook()."
+            )
+            return
+
+        print("Constructing histogram of test set...")
+        self.histogram_test = []
+        for image in self.test_images_list:
+            descriptor = self.get_descriptor(image)
+            histogram = self.construct_histogram(descriptor)
+            self.histogram_test.append(histogram)
+
+        self.histogram_test = np.stack(self.histogram_test, axis=0)
+        print("Constructed histogram of test set. Shape: ", self.histogram_test.shape)
+        return self.histogram_test
 
     def encode_image(self, image_paths):
         """
@@ -303,10 +328,12 @@ class VectorQuantization:
             print("Invalid shape of descriptor.")
             return
         if descriptors.ndim == 2:
-            distances_to_codewords = np.linalg.norm(descriptors - self.vocab, axis=1)
+            distances_to_codewords = np.linalg.norm(
+                descriptors[:, np.newaxis, :] - self.vocab, axis=2
+            )
             codeword = np.zeros((descriptors.shape[0], self.vocab_size))
             for i in range(descriptors.shape[0]):
-                codeword[i, np.argmin(distances_to_codewords[i])] = 1
+                codeword[i, np.argmin(distances_to_codewords[i, :])] = 1
 
         return codeword
 
@@ -331,7 +358,7 @@ class VectorQuantization:
             descriptors
         )  # (num_of_desc, vocab_size)
 
-        histogram = np.sum(codewords, axis=1)  # (num_images,vocab_size,)
+        histogram = np.sum(codewords, axis=0)  # (num_images,vocab_size,)
 
         return histogram
 
@@ -504,8 +531,8 @@ class VectorQuantization:
 
         # get index of image and histogram
         if train:
-            img_idx = self.img_idx_train[cls][idx]
-            hist_idx = self.class_list.index(cls) * self.img_sel[0] + img_idx
+            img_path = os.path.join(self.train_images[cls][idx])
+
             histogram = self.histogram_train
         else:
             img_idx = self.img_idx_test[cls][idx]
