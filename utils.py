@@ -137,7 +137,7 @@ class DataHandler:
         self.img_idx_train = img_idx_train
         self.img_idx_test = img_idx_test
 
-    def train_codebook(self, vocab_size=200, total_descriptors=100000):
+    def fit_codebook(self, vocab_size=200, total_descriptors=100000):
         # check if the data is loaded
         if self.class_list is None:
             print("Data is not loaded. Please run load_data() first.")
