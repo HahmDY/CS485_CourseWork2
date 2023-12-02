@@ -10,33 +10,40 @@ import shutil
 
 class DataHandler:
     def __init__(self, root):
-        self.root = root
-        self.class_list = None
-        self.img_list = None
+        # self.root = root
+        # self.class_list = None
+        # self.img_list = None
 
-        self.vocab_size = 0
-        self.img_idx_train = None
-        self.img_idx_test = None
+        # self.vocab_size = 0
+        # self.img_idx_train = None
+        # self.img_idx_test = None
 
         self.vocab = None  # VISUAL WORDS. shape (vocab_size, 128)
 
-        self.descs_dic_train = None  # VISUAL Descriptors
-        self.descs_train = None
-        self.descs_train_label = None
-        self.descs_dic_test = None
-        self.descs_test = None
-        self.descs_test_label = None
+        # self.descs_dic_train = None  # VISUAL Descriptors
+        # self.descs_train = None
+        # self.descs_train_label = None
+        # self.descs_dic_test = None
+        # self.descs_test = None
+        # self.descs_test_label = None
 
-        self.histogram_train = None
-        self.histogram_te = None
+        # self.histogram_train = None
+        # self.histogram_te = None
 
         ############# dataset #############
+        self.data_dir = None  # data directory
+
         self.class_list = None  # list of class names
         self.image_dataset = None  # dictionary of image names. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
         self.train_images = None  # dictionary of train images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
         self.test_images = None  # dictionary of test images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
         self.img_idx_train = None  # dictionary of image index of train set. {key: class name, value: image index.} e.g. {'water_lilly': [0, 1, 2, ...], ...}
         self.img_idx_test = None  # dictionary of image index of test set. {key: class name, value: image index.} e.g. {'water_lilly': [0, 1, 2, ...], ...}
+
+        self.train_images_list = None  # list of train images. e.g. ['101_ObjectCategories/water_lilly/image_0001.jpg', '101_ObjectCategories/water_lilly/image_0002.jpg', ...]
+        self.test_images_list = None  # list of test images. e.g. ['101_ObjectCategories/water_lilly/image_0001.jpg', '101_ObjectCategories/water_lilly/image_0002.jpg', ...]
+        self.train_labels_list = None
+        self.test_labels_list = None
 
     def load_data(self, data_dir):
         """
@@ -92,6 +99,37 @@ class DataHandler:
                 image_dataset[class_folder][idx] for idx in img_idx_test[class_folder]
             ]
 
+        # Listify the dataset
+        # Images are stored as list of image paths
+        train_images_list = []
+        test_images_list = []
+        train_labels_list = []
+        test_labels_list = []
+
+        for class_folder in class_list:
+            for image_name in train_images[class_folder]:
+                image_path = os.path.join(data_dir, class_folder, image_name)
+                train_images_list.append(image_path)
+                train_labels_list.append(class_folder)
+
+            for image_name in test_images[class_folder]:
+                image_path = os.path.join(data_dir, class_folder, image_name)
+                test_images_list.append(image_path)
+                test_labels_list.append(class_folder)
+
+        # Convert to numpy array
+        train_images_list = np.array(train_images_list)
+        test_images_list = np.array(test_images_list)
+        train_labels_list = np.array(train_labels_list)
+        test_labels_list = np.array(test_labels_list)
+
+        # save as attributes
+        self.train_images_list = train_images_list
+        self.test_images_list = test_images_list
+        self.train_labels_list = train_labels_list
+        self.test_labels_list = test_labels_list
+
+        self.data_dir = data_dir
         self.class_list = class_list
         self.image_dataset = image_dataset
         self.train_images = train_images
@@ -108,13 +146,12 @@ class DataHandler:
         # compute SIFT descriptors. Due to the memory issues, limit the total number of descriptors to total_descriptor (100,000 default).
         print("Start computing SIFT descriptors...")
         sift = cv.SIFT_create()
-        descs = None
 
         descriptors = []
         num_desc = 0
         for class_folder in self.class_list:
             for image_name in self.train_images[class_folder]:
-                image_path = os.path.join(self.root, class_folder, image_name)
+                image_path = os.path.join(self.data_dir, class_folder, image_name)
                 image = cv.imread(image_path)
                 if image.shape[2] == 3:
                     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -132,6 +169,19 @@ class DataHandler:
         print("Start constructing k-means codebook...")
         self.vocab_size = vocab_size
         self.construct_kmeans_codebook(vocab_size, descriptors)
+
+    def construct_train_histogram(self):
+        """
+        Construct histogram of train set.
+        """
+
+        if self.vocab is None:
+            print(
+                "Codebook is not constructed. Please run construct_kmeans_codebook()."
+            )
+            return
+
+        print("Constructing histogram of train set...")
 
     def sift(self, img_sel=[15, 15]):
         ### initialize
@@ -220,7 +270,7 @@ class DataHandler:
         self.descs_test = descs_test
         self.descs_test_label = descs_test_label
 
-    def construct_kmeans_codebook(self, vocab_size=64, decriptors=None):
+    def construct_kmeans_codebook(self, vocab_size=200, decriptors=None):
         """
         Creates a codebook using KMeans clustering and the SIFT descriptors of the training set.
 
@@ -239,15 +289,15 @@ class DataHandler:
             "The codebook is constructed. You can use it with 'self.vocab' attribute."
         )
 
-    def assign_kmeans_codeword(self, desc):
+    def assign_kmeans_codeword(self, descriptors):
         """
         Assigns the nearest codeword for each descriptor.
 
         Args:
-            desc (np.array): The descriptor of an image. shape of (num_images, num_of_desc, 128). The return shape is also determined by the shape of desc.
+            desc (np.array): The descriptor of an image. shape of (num_of_desc, 128). The return shape is also determined by the shape of desc.
 
         Returns:
-            codeword (np.array): The codeword of the descriptor. shape of (num_images, num_of_desc, vocab_size)
+            codeword (np.array): The codeword of the descriptor. shape of (num_of_desc, vocab_size)
         """
 
         if self.vocab is None:
@@ -256,30 +306,14 @@ class DataHandler:
             )
             return
 
-        # if desc.ndim == 1:
-        #     desc = desc[np.newaxis, :]
-        #     distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
-        #     nearest_codeword = np.argmin(distances_to_centers)
-        #     codeword = np.zeros(self.vocab_size)
-        #     codeword[nearest_codeword] = 1
-        # elif desc.ndim == 2:
-        #     distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
-        #     nearest_codeword = np.argmin(distances_to_centers, axis=1)
-        #     codeword = np.zeros((desc.shape[0], self.vocab_size))
-        #     for i in range(desc.shape[0]):
-        #         codeword[i, nearest_codeword[i]] = 1
-        if desc.ndim == 3:
-            codeword = np.zeros((desc.shape[0], desc.shape[1], self.vocab_size))
-            distances_to_centers = np.linalg.norm(
-                self.vocab[np.newaxis, :, :] - desc, axis=2
-            )
-            nearest_codeword = np.argmin(distances_to_centers, axis=2)
-            for i in range(desc.shape[0]):
-                for j in range(desc.shape[1]):
-                    codeword[i, j, nearest_codeword[i, j]] = 1
-        else:
-            print("Invalid shape of desc.")
+        if desc.shape[1] != 128:
+            print("Invalid shape of descriptor.")
             return
+        if desc.ndim == 2:
+            distances_to_codewords = np.linalg.norm(desc - self.vocab, axis=1)
+            codeword = np.zeros((desc.shape[0], self.vocab_size))
+            for i in range(desc.shape[0]):
+                codeword[i, np.argmin(distances_to_codewords[i])] = 1
 
         return codeword
 
@@ -288,10 +322,10 @@ class DataHandler:
         Constructs the histogram of an image.
 
         Args:
-            descriptors (np.array): The descriptors of an image. shape of (num_images, num_of_desc, 128).
+            descriptors (np.array): The descriptors of an image. shape of (num_of_desc, 128).
 
         Returns:
-            histogram (np.array): The histogram of the image. shape of (num_images, vocab_size,).
+            histogram (np.array): The histogram of the image. shape of (vocab_size,).
         """
 
         if self.vocab is None:
@@ -302,7 +336,7 @@ class DataHandler:
 
         codewords = self.assign_kmeans_codeword(
             descriptors
-        )  # (num_images, num_of_desc, vocab_size)
+        )  # (num_of_desc, vocab_size)
 
         histogram = np.sum(codewords, axis=1)  # (num_images,vocab_size,)
 
