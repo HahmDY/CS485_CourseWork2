@@ -18,6 +18,8 @@ class DataHandler:
         self.img_idx_train = None
         self.img_idx_test = None
 
+        self.vocab = None  # VISUAL WORDS. shape (vocab_size, 128)
+
         self.descs_dic_train = None  # VISUAL Descriptors
         self.descs_train = None
         self.descs_train_label = None
@@ -111,6 +113,28 @@ class DataHandler:
         self.descs_dic_test = descs_dic_test
         self.descs_test = descs_test
         self.descs_test_label = descs_test_label
+
+    def construct_kmeans_codebook(self, vocab_size=64):
+        """
+        Creates a codebook using KMeans clustering and the SIFT descriptors of the training set.
+
+        Args:
+            vocab_size (int): The size of the codebook.
+        """
+
+        if self.descs_train is None:
+            print("SIFT descriptors are not computed. Please run sift() first.")
+            return
+
+        print("Start constructing k-means codebook...")
+        self.vocab_size = vocab_size
+        kmeans = KMeans(n_clusters=self.vocab_size, random_state=0, n_init=5)
+        kmeans.fit(self.descs_train)
+        self.vocab = kmeans.cluster_centers_
+        print("Shape of vocab: ", self.vocab.shape, "(vocab_size, 128)")
+        print(
+            "The codebook is constructed. You can use it with 'self.vocab' attribute."
+        )
 
     def kmeans_codebook(self, vocab_size=64):
         """
