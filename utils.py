@@ -99,6 +99,40 @@ class DataHandler:
         self.img_idx_train = img_idx_train
         self.img_idx_test = img_idx_test
 
+    def train_codebook(self, vocab_size=200, total_descriptors=100000):
+        # check if the data is loaded
+        if self.class_list is None:
+            print("Data is not loaded. Please run load_data() first.")
+            return
+
+        # compute SIFT descriptors. Due to the memory issues, limit the total number of descriptors to total_descriptor (100,000 default).
+        print("Start computing SIFT descriptors...")
+        sift = cv.SIFT_create()
+        descs = None
+
+        descriptors = []
+        num_desc = 0
+        for class_folder in self.class_list:
+            for image_name in self.train_images[class_folder]:
+                image_path = os.path.join(self.root, class_folder, image_name)
+                image = cv.imread(image_path)
+                if image.shape[2] == 3:
+                    image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+                _, desc = sift.detectAndCompute(image, None)
+                descriptors.append(desc)
+                num_desc += desc.shape[0]
+
+                if num_desc >= total_descriptors:
+                    break
+
+        descriptors = np.concatenate(descriptors, axis=0)
+        print("Shape of descriptors: ", descriptors.shape)
+
+        # construct codebook
+        print("Start constructing k-means codebook...")
+        self.vocab_size = vocab_size
+        self.construct_kmeans_codebook(vocab_size, descriptors)
+
     def sift(self, img_sel=[15, 15]):
         ### initialize
         self.img_sel = img_sel
@@ -186,22 +220,19 @@ class DataHandler:
         self.descs_test = descs_test
         self.descs_test_label = descs_test_label
 
-    def construct_kmeans_codebook(self, vocab_size=64):
+    def construct_kmeans_codebook(self, vocab_size=64, decriptors=None):
         """
         Creates a codebook using KMeans clustering and the SIFT descriptors of the training set.
 
         Args:
             vocab_size (int): The size of the codebook.
+            descriptors (np.array): The descriptors of an image. shape of (num_of_desc, 128).
         """
-
-        if self.descs_train is None:
-            print("SIFT descriptors are not computed. Please run sift() first.")
-            return
 
         print("Start constructing k-means codebook...")
         self.vocab_size = vocab_size
         kmeans = KMeans(n_clusters=self.vocab_size, random_state=0, n_init=5)
-        kmeans.fit(self.descs_train)
+        kmeans.fit(decriptors)
         self.vocab = kmeans.cluster_centers_
         print("Shape of vocab: ", self.vocab.shape, "(vocab_size, 128)")
         print(
