@@ -30,6 +30,75 @@ class DataHandler:
         self.histogram_train = None
         self.histogram_te = None
 
+        ############# dataset #############
+        self.class_list = None  # list of class names
+        self.image_dataset = None  # dictionary of image names. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
+        self.train_images = None  # dictionary of train images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
+        self.test_images = None  # dictionary of test images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
+        self.img_idx_train = None  # dictionary of image index of train set. {key: class name, value: image index.} e.g. {'water_lilly': [0, 1, 2, ...], ...}
+        self.img_idx_test = None  # dictionary of image index of test set. {key: class name, value: image index.} e.g. {'water_lilly': [0, 1, 2, ...], ...}
+
+    def load_data(self, data_dir):
+        """
+        1. Load the dataset from the given directory.
+        2. Load the class names from the directory names.
+        3. Load the image names from the file names.
+        4. Construct image dictionary, with {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
+        5. split the dataset into train and test set. (default: 15 images for train, 15 images for test). As a result,
+        you will have two dictionaries for train and test set.
+        """
+
+        if not os.path.isdir(data_dir):
+            print("Invalid data directory.")
+            return
+
+        print("Start loading data...")
+        class_list = []
+        for class_folder in os.listdir(data_dir):
+            class_path = os.path.join(data_dir, class_folder)
+            if not os.path.isdir(class_path):
+                continue
+            class_list.append(class_folder)
+
+        print(f"Found {len(class_list)} classes: {class_list}")
+
+        image_dataset = {}
+        for class_folder in class_list:
+            class_path = os.path.join(data_dir, class_folder)
+            image_dataset[class_folder] = [
+                image for image in os.listdir(class_path) if image.endswith(".jpg")
+            ]
+            print(
+                f"Class: {class_folder}, # of images found: {len(image_dataset[class_folder])}"
+            )
+
+        print(
+            "Split the dataset into train and test set. (default: 15 images for train, 15 images for test)."
+        )
+        img_idx_train = {}
+        img_idx_test = {}
+        for class_folder in class_list:
+            permute = np.random.permutation(len(image_dataset[class_folder]))
+            img_idx_train[class_folder] = permute[:15]
+            img_idx_test[class_folder] = permute[15:]
+
+        train_images = {}
+        test_images = {}
+        for class_folder in class_list:
+            train_images[class_folder] = [
+                image_dataset[class_folder][idx] for idx in img_idx_train[class_folder]
+            ]
+            test_images[class_folder] = [
+                image_dataset[class_folder][idx] for idx in img_idx_test[class_folder]
+            ]
+
+        self.class_list = class_list
+        self.image_dataset = image_dataset
+        self.train_images = train_images
+        self.test_images = test_images
+        self.img_idx_train = img_idx_train
+        self.img_idx_test = img_idx_test
+
     def sift(self, img_sel=[15, 15]):
         ### initialize
         self.img_sel = img_sel
@@ -40,12 +109,15 @@ class DataHandler:
         ]
         self.class_list = class_list
 
-        img_list = {}  # The total list of images
+        img_list = {}  # The total dict of images
+
         descs_dic_train = (
             {}
         )  # The dictionary of descriptors of train set. key: (class, img_idx), value: descriptors.
-        descs_train = None  # total desc of train set
+
+        descs_train = None  # total desc of train set. List of descriptors.
         descs_train_label = []  # total label of train set
+
         img_idx_train = (
             {}
         )  # The dictionary of image index of train set. key: class, value: image index
@@ -141,10 +213,10 @@ class DataHandler:
         Assigns the nearest codeword for each descriptor.
 
         Args:
-            desc (np.array): The descriptor of an image. shape of (128,) or (num_of_desc, 128). The return shape is also determined by the shape of desc.
+            desc (np.array): The descriptor of an image. shape of (num_images, num_of_desc, 128). The return shape is also determined by the shape of desc.
 
         Returns:
-            codeword (np.array): The codeword of the descriptor. shape of (vocab_size,) or (num_of_desc, vocab_size).
+            codeword (np.array): The codeword of the descriptor. shape of (num_images, num_of_desc, vocab_size)
         """
 
         if self.vocab is None:
@@ -153,20 +225,72 @@ class DataHandler:
             )
             return
 
-        if desc.ndim == 1:
-            desc = desc[np.newaxis, :]
-            distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
-            nearest_codeword = np.argmin(distances_to_centers)
-            codeword = np.zeros(self.vocab_size)
-            codeword[nearest_codeword] = 1
-        else:
-            distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
-            nearest_codeword = np.argmin(distances_to_centers, axis=1)
-            codeword = np.zeros((desc.shape[0], self.vocab_size))
+        # if desc.ndim == 1:
+        #     desc = desc[np.newaxis, :]
+        #     distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
+        #     nearest_codeword = np.argmin(distances_to_centers)
+        #     codeword = np.zeros(self.vocab_size)
+        #     codeword[nearest_codeword] = 1
+        # elif desc.ndim == 2:
+        #     distances_to_centers = np.linalg.norm(self.vocab - desc, axis=1)
+        #     nearest_codeword = np.argmin(distances_to_centers, axis=1)
+        #     codeword = np.zeros((desc.shape[0], self.vocab_size))
+        #     for i in range(desc.shape[0]):
+        #         codeword[i, nearest_codeword[i]] = 1
+        if desc.ndim == 3:
+            codeword = np.zeros((desc.shape[0], desc.shape[1], self.vocab_size))
+            distances_to_centers = np.linalg.norm(
+                self.vocab[np.newaxis, :, :] - desc, axis=2
+            )
+            nearest_codeword = np.argmin(distances_to_centers, axis=2)
             for i in range(desc.shape[0]):
-                codeword[i, nearest_codeword[i]] = 1
+                for j in range(desc.shape[1]):
+                    codeword[i, j, nearest_codeword[i, j]] = 1
+        else:
+            print("Invalid shape of desc.")
+            return
 
         return codeword
+
+    def construct_histogram(self, descriptors):
+        """
+        Constructs the histogram of an image.
+
+        Args:
+            descriptors (np.array): The descriptors of an image. shape of (num_images, num_of_desc, 128).
+
+        Returns:
+            histogram (np.array): The histogram of the image. shape of (num_images, vocab_size,).
+        """
+
+        if self.vocab is None:
+            print(
+                "Codebook is not constructed. Please run construct_kmeans_codebook()."
+            )
+            return
+
+        codewords = self.assign_kmeans_codeword(
+            descriptors
+        )  # (num_images, num_of_desc, vocab_size)
+
+        histogram = np.sum(codewords, axis=1)  # (num_images,vocab_size,)
+
+        return histogram
+
+    def bow_dataset(self):
+        """
+
+        Construct histogram of train and test set.
+        """
+
+        if self.vocab is None:
+            print(
+                "Codebook is not constructed. Please run construct_kmeans_codebook()."
+            )
+            return
+
+        print("Constructing histogram of train set...")
+        # Need to construct train_set as (num_images, num_of_desc, 128)
 
     def kmeans_codebook(self, vocab_size=64):
         """
