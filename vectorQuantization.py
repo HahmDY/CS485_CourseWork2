@@ -56,7 +56,19 @@ class VectorQuantization:
         ############# SIFT #############
         self.sift = cv.SIFT_create()
         ############# histogram #############
+        self.train_histograms = (
+            None  # histogram of train set. shape of (num_train, vocab_size)
+        )
+        self.test_histograms = (
+            None  # histogram of test set. shape of (num_test, vocab_size)
+        )
 
+        self.train_histograms_dict = (
+            {}
+        )  # Dictionary of histogram of train set. {key: class name, value: histogram of train set. shape of (num_train_per_class, vocab_size)}
+        self.test_histograms_dict = (
+            {}
+        )  # Dictionary of histogram of test set. {key: class name, value: histogram of test set. shape of (num_test_per_class, vocab_size)}
         ####################################
 
         self.load_data(datadir)
@@ -224,16 +236,25 @@ class VectorQuantization:
             return
 
         print("Constructing histogram of train set...")
-        self.histogram_train = []
-        for image in self.train_images_list:
+        self.train_histograms = []
+        self.train_histograms_dict = {}
+
+        for i, image in enumerate(self.train_images_list):
             image_path = os.path.join(image)
             descriptor = self.get_descriptor(image_path)
             histogram = self.construct_histogram(descriptor)
-            self.histogram_train.append(histogram)
 
-        self.histogram_train = np.stack(self.histogram_train, axis=0)
-        print("Constructed histogram of train set. Shape: ", self.histogram_train.shape)
-        return self.histogram_train
+            cls = self.train_labels_list[i]
+            if cls not in self.train_histograms_dict:
+                self.train_histograms_dict[cls] = []
+            self.train_histograms_dict[cls].append(histogram)
+            self.train_histograms.append(histogram)
+
+        self.train_histograms = np.stack(self.histogram_train, axis=0)
+        print(
+            "Constructed histogram of train set. Shape: ", self.train_histograms.shape
+        )
+        return self.train_histograms
 
     def construct_test_histograms(self):
         """
@@ -247,15 +268,21 @@ class VectorQuantization:
             return
 
         print("Constructing histogram of test set...")
-        self.histogram_test = []
-        for image in self.test_images_list:
+        self.test_histograms = []
+        self.histogram_test_dict = {}
+        for i, image in enumerate(self.test_images_list):
             descriptor = self.get_descriptor(image)
             histogram = self.construct_histogram(descriptor)
-            self.histogram_test.append(histogram)
 
-        self.histogram_test = np.stack(self.histogram_test, axis=0)
-        print("Constructed histogram of test set. Shape: ", self.histogram_test.shape)
-        return self.histogram_test
+            cls = self.test_labels_list[i]
+            if cls not in self.histogram_test_dict:
+                self.histogram_test_dict[cls] = []
+            self.histogram_test_dict[cls].append(histogram)
+            self.test_histograms.append(histogram)
+
+        self.test_histograms = np.stack(self.test_histograms, axis=0)
+        print("Constructed histogram of test set. Shape: ", self.test_histograms.shape)
+        return self.test_histograms
 
     def encode_image(self, image_paths):
         """
