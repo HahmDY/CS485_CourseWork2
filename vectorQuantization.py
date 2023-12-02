@@ -250,7 +250,7 @@ class VectorQuantization:
             self.train_histograms_dict[cls].append(histogram)
             self.train_histograms.append(histogram)
 
-        self.train_histograms = np.stack(self.histogram_train, axis=0)
+        self.train_histograms = np.stack(self.train_histograms, axis=0)
         print(
             "Constructed histogram of train set. Shape: ", self.train_histograms.shape
         )
@@ -550,33 +550,40 @@ class VectorQuantization:
         rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
         rf_classifier.fit(descs_train, descs_train_label)
 
-    def visualization(self, train=True, cls="water_lilly", idx=0):
+    def visualization(self, dataset="train", cls="water_lilly", idx=0):
+        """
+        Visualize the image and its histogram.
+
+        Args:
+            dataset (str, optional): the dataset to visualize. "train" or "test". Defaults to "train".
+            cls (str, optional): the class name. Defaults to "water_lilly".
+            idx (int, optional): the index of the image. Defaults to 0.
+        """
         # Setting up the figure with 2 subplots
         fig, (ax1, ax2) = plt.subplots(
             1, 2, figsize=(10, 5)
         )  # You can adjust the figure size
 
         # get index of image and histogram
-        if train:
-            img_path = os.path.join(self.train_images[cls][idx])
-
-            histogram = self.histogram_train
+        if dataset == "train":
+            img_path = os.path.join(self.data_dir, cls, self.train_images[cls][idx])
+            histogram = self.train_histograms_dict[cls][idx]
+        elif dataset == "test":
+            img_path = os.path.join(self.data_dir, cls, self.test_images[cls][idx])
+            histogram = self.test_histograms_dict[cls][idx]
         else:
-            img_idx = self.img_idx_test[cls][idx]
-            hist_idx = self.class_list.index(cls) * self.img_sel[1] + img_idx
-            histogram = self.histogram_te
+            print("Invalid dataset.")
+            return
 
         # Plot the image
-        sub_folder_name = os.path.join(self.root, cls)
-        img_path = os.path.join(sub_folder_name, self.img_list[cls][img_idx])
-        title = self.img_list[cls][img_idx]
+        title = img_path.split("/")[-1]
         image = cv.imread(img_path)
         ax1.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB))
         ax1.set_title(title)
         ax1.axis("off")  # To hide axis ticks and labels
 
         # Plot the histogram
-        ax2.bar(range(self.vocab_size), histogram[hist_idx])
+        ax2.bar(range(self.vocab_size), histogram)
         ax2.set_title(f"Histogram of {title}")
         ax2.set_xlabel("Visual Word Index")
         ax2.set_ylabel("Frequency")
