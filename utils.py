@@ -25,7 +25,7 @@ class DataHandler:
         self.descs_test = None
         self.descs_test_label = None
 
-        self.histogram_tr = None
+        self.histogram_train = None
         self.histogram_te = None
 
     def sift(self, img_sel=[15, 15]):
@@ -113,6 +113,19 @@ class DataHandler:
         self.descs_test_label = descs_test_label
 
     def kmeans_codebook(self, vocab_size=64):
+        """
+        Creates a codebook using KMeans clustering and the SIFT descriptors of the training set.
+
+        Args:
+            vocab_size (int): The size of the codebook.
+
+        Returns:
+            histogram_train (np.ndarray): The histogram of the training set.
+            label_tr (np.ndarray): The label of the training set.
+            histogram_te (np.ndarray): The histogram of the test set.
+            label_te (np.ndarray): The label of the test set.
+
+        """
         ### load variables
         self.vocab_size = vocab_size
         img_list = self.img_list
@@ -151,19 +164,21 @@ class DataHandler:
             AttributeError: 'NoneType' object has no attribute 'split'
         """
         vocab = kmeans.cluster_centers_
-        print("Shape of vocab: ", vocab.shape, "(vocab_size, 128)")
+        print(
+            "Shape of vocab: ", vocab.shape, "(vocab_size, 128)"
+        )  # 128 here is the length of the descriptor.
         squares_centers = np.sum(vocab**2, axis=1)
 
         ### histogram construction of train set
         print("Contructing histogram for train set...")
-        histogram_tr = np.zeros(
+        histogram_train = np.zeros(
             (len(self.class_list) * self.img_sel[0], self.vocab_size)
-        )
+        )  # (num_class * num_train, vocab_size)
         for c in self.class_list:
             for i in img_idx_train[c]:
-                squares_desc_tr = np.sum(descs_dic_train[c, i] ** 2, axis=1)
+                squares_desc_train = np.sum(descs_dic_train[c, i] ** 2, axis=1)
                 dist = np.sqrt(
-                    squares_desc_tr[:, np.newaxis]
+                    squares_desc_train[:, np.newaxis]
                     + squares_centers[np.newaxis, :]
                     - 2 * np.dot(descs_dic_train[c, i], vocab.T)
                 )  # (len(kpt) of a image, len(centers))
@@ -171,16 +186,18 @@ class DataHandler:
                 hist, _ = np.histogram(
                     assignments, bins=np.arange(0, self.vocab_size + 1)
                 )  # len(vocab)
-                histogram_tr[
+                histogram_train[
                     self.class_list.index(c) * len(img_idx_train[c])
                     + img_idx_train[c].index(i),
                     :,
                 ] += hist
-        histogram_tr = (
-            histogram_tr / np.sum(histogram_tr, axis=1)[:, np.newaxis]
+        histogram_train = (
+            histogram_train / np.sum(histogram_train, axis=1)[:, np.newaxis]
         )  # (#data, #centers)
         print(
-            "Shape of histogram_tr: ", histogram_tr.shape, "= (# of data, # of words)"
+            "Shape of histogram_train: ",
+            histogram_train.shape,
+            "= (# of data, # of words)",
         )
 
         ### histogram construction of test set
@@ -220,10 +237,10 @@ class DataHandler:
             label_te[(i - 1) * self.img_sel[1] : i * self.img_sel[1]] = i
 
         ### save variables
-        self.histogram_tr = histogram_tr
+        self.histogram_train = histogram_train
         self.histogram_te = histogram_te
 
-        return histogram_tr, label_tr, histogram_te, label_te
+        return histogram_train, label_tr, histogram_te, label_te
 
     def RF_codebook(self, vocab_size=64):
         ### load variables
@@ -251,7 +268,7 @@ class DataHandler:
         if train:
             img_idx = self.img_idx_train[cls][idx]
             hist_idx = self.class_list.index(cls) * self.img_sel[0] + img_idx
-            histogram = self.histogram_tr
+            histogram = self.histogram_train
         else:
             img_idx = self.img_idx_test[cls][idx]
             hist_idx = self.class_list.index(cls) * self.img_sel[1] + img_idx
