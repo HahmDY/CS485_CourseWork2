@@ -389,21 +389,55 @@ class VectorQuantization:
         Construct histogram of test set.
         """
 
-        if self.vocab is None:
-            print(
-                "Codebook is not constructed. Please run construct_kmeans_codebook()."
-            )
-            return
+        if self.use_RF_codebook:
+            if self.vq_forest is None:
+                print(
+                    "Codebook is not constructed. Please run construct_RF_codebook()."
+                )
+                return
+            else:
+                self.construct_test_histograms_RF()
 
+        else:
+            if self.vocab is None:
+                print(
+                    "Codebook is not constructed. Please run construct_kmeans_codebook()."
+                )
+                return
+            else:
+                self.construct_test_histograms_kmeans()
+
+    def construct_test_histograms_kmeans(self):
         print("Constructing histogram of test set...")
         self.test_histograms = []
         self.test_histograms_dict = {}
+
         for i, image in enumerate(self.test_images_list):
-            descriptor = self.get_descriptor(image)
+            image_path = os.path.join(image)
+            descriptor = self.get_descriptor(image_path)
             histogram = self.construct_histogram_kmeans(descriptor)
 
             cls = self.test_labels_list[i]
+            if cls not in self.test_histograms_dict:
+                self.test_histograms_dict[cls] = []
+            self.test_histograms_dict[cls].append(histogram)
+            self.test_histograms.append(histogram)
 
+        self.test_histograms = np.stack(self.test_histograms, axis=0)
+        print("Constructed histogram of test set. Shape: ", self.test_histograms.shape)
+        return self.test_histograms
+
+    def construct_test_histograms_RF(self):
+        print("Constructing histogram of test set...")
+        self.test_histograms = []
+        self.test_histograms_dict = {}
+
+        for i, image in enumerate(self.test_images_list):
+            image_path = os.path.join(image)
+            descriptor = self.get_descriptor(image_path)
+            histogram = self.construct_histogram_RF(descriptor)
+
+            cls = self.test_labels_list[i]
             if cls not in self.test_histograms_dict:
                 self.test_histograms_dict[cls] = []
             self.test_histograms_dict[cls].append(histogram)
