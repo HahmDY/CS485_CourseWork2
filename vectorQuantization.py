@@ -12,25 +12,7 @@ from time import time
 
 class VectorQuantization:
     def __init__(self, datadir, train_num=15, test_num=15, use_RF_codebook=False):
-        # self.root = root
-        # self.class_list = None
-        # self.img_list = None
-
-        # self.vocab_size = 0
-        # self.img_idx_train = None
-        # self.img_idx_test = None
-
         self.vocab = None  # VISUAL WORDS. shape (vocab_size, 128)
-
-        # self.descs_dic_train = None  # VISUAL Descriptors
-        # self.descs_train = None
-        # self.descs_train_label = None
-        # self.descs_dic_test = None
-        # self.descs_test = None
-        # self.descs_test_label = None
-
-        # self.histogram_train = None
-        # self.histogram_te = None
 
         ############# dataset #############
         self.data_dir = datadir  # data directory
@@ -71,7 +53,10 @@ class VectorQuantization:
 
         self.load_data(datadir)
 
+        ############# RF codebook #############
         self.use_RF_codebook = use_RF_codebook
+        self.vq_forest = None  # Random Forest for codebook
+        ######################################
 
     def save_as_file(self, export_path="vectorQuantization.pkl"):
         """
