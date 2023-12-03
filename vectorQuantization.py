@@ -73,6 +73,29 @@ class VectorQuantization:
 
         self.load_data(datadir)
 
+    def save_as_file(self, export_path="vectorQuantization.pkl"):
+        """
+        Save the class as a pickle file.
+
+        Args:
+            export_path (str, optional): The path to save the file. Defaults to "vectorQuantization.pkl".
+        """
+        import pickle
+
+        if os.path.exists(export_path):
+            print("File already exists.")
+            ans = input("Do you want to overwrite? (y/n)")
+            if ans != "y":
+                return
+
+        if not os.path.exists(export_path):
+            os.makedirs(os.path.dirname(export_path), exist_ok=True)
+
+        with open(export_path, "wb") as f:
+            pickle.dump(self, f)
+
+        print(f"Saved as {export_path}")
+
     def load_data(self, data_dir):
         """
         1. Load the dataset from the given directory.
@@ -575,3 +598,26 @@ class VectorQuantization:
                 src_path = os.path.join(class_path, img)
                 dst_path = os.path.join(test_class_path, img)
                 shutil.copy(src_path, dst_path)
+
+
+def load_from_file(vq_path="vectorQuantization.pkl"):
+    """
+    Load the class from a pickle file.
+
+    Args:
+        vq_path (str, optional): The path to load the file. Defaults to "vectorQuantization.pkl".
+
+    Returns:
+        vq (VectorQuantization): The class.
+    """
+    import pickle
+
+    if not os.path.exists(vq_path):
+        print("Invalid path.")
+        return
+
+    with open(vq_path, "rb") as f:
+        vq = pickle.load(f)
+
+    print(f"Loaded from {vq_path}")
+    return vq
