@@ -167,6 +167,52 @@ class VectorQuantization:
         self.img_idx_train = img_idx_train
         self.img_idx_test = img_idx_test
 
+    def export_train_histograms(self, export_path="./histograms/train_histograms.npy"):
+        if self.train_histograms is None:
+            print("Train histograms are not constructed.")
+            return
+
+        if os.path.exists(export_path):
+            print("File already exists.")
+            ans = input("Do you want to overwrite? (y/n)")
+            if ans != "y":
+                return
+        if not os.path.exists(export_path):
+            os.makedirs(os.path.dirname(export_path), exist_ok=True)
+
+        np.save(export_path, self.train_histograms)
+
+    def export_test_histograms(self, export_path="./histograms/test_histograms.npy"):
+        if self.test_histograms is None:
+            print("Test histograms are not constructed.")
+            return
+
+        if os.path.exists(export_path):
+            print("File already exists.")
+            ans = input("Do you want to overwrite? (y/n)")
+            if ans != "y":
+                return
+        if not os.path.exists(export_path):
+            os.makedirs(os.path.dirname(export_path), exist_ok=True)
+
+        np.save(export_path, self.test_histograms)
+
+    def load_train_histograms(self, export_path="./histograms/train_histograms.npy"):
+        if not os.path.exists(export_path):
+            print("Invalid histogram path.")
+            return
+
+        self.train_histograms = np.load(export_path)
+        self.vocab_size = self.train_histograms.shape[1]
+
+    def load_test_histograms(self, export_path="./histograms/test_histograms.npy"):
+        if not os.path.exists(export_path):
+            print("Invalid histogram path.")
+            return
+
+        self.test_histograms = np.load(export_path)
+        self.vocab_size = self.test_histograms.shape[1]
+
     def load_codebook(self, codebook_path):
         if not os.path.exists(codebook_path):
             print("Invalid codebook path.")
@@ -453,14 +499,6 @@ class VectorQuantization:
 
         # Display the entire figure
         plt.show()
-
-    @property
-    def vocab(self):
-        return self.vocab
-
-    @property
-    def vocab_size(self):
-        return self.vocab_size
 
     def get_train_histograms(self):
         return self.train_histograms

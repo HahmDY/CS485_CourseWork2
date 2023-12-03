@@ -4,6 +4,9 @@ import numpy as np
 import random
 from vectorQuantization import VectorQuantization
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import confusion_matrix
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 
 def main():
@@ -25,14 +28,48 @@ def main():
     idx = 5  # 0~14
     vq_new.visualization("train", cls, idx)
 
-    # datahandler.visualization(True, cls, idx)  # train : True, test : False
+    # train RF
+    train_X = vq_new.get_test_histograms()
+    train_y = vq_new.get_test_labels()
 
-    # # save result
-    # np.save("histogram_tr.npy", histogram_tr)
-    # np.save("label_tr.npy", label_tr)
-    # np.save("histogram_te.npy", histogram_te)
-    # np.save("label_te.npy", label_te)
-    # print(histogram_tr.shape, label_tr.shape, histogram_te.shape, label_te.shape)
+    print(train_X.shape)
+    print(train_y.shape)
+
+    print("Start Random Forest Training")
+    rf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=0)
+    rf.fit(train_X, train_y)
+
+    # test RF
+    test_X = vq_new.get_test_histograms()
+    test_y = vq_new.get_test_labels()
+
+    print("Test set shape")
+    print(test_X.shape)
+    print(test_y.shape)
+
+    print("Start Random Forest Testing")
+    pred_y = rf.predict(test_X)
+
+    # accuracy, confusion matrix
+    print("Accuracy: ", np.mean(pred_y == test_y))
+    print("Confusion Matrix: ")
+    cm = confusion_matrix(test_y, pred_y)
+
+    # plot confusion matrix
+    plt.figure(figsize=(10, 10))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        xticklabels=vq_new.get_class_list(),
+        yticklabels=vq_new.get_class_list(),
+    )
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.title("Confusion Matrix")
+    plt.show()
+    plt.savefig("confusion_matrix_Q2.png")
 
 
 if __name__ == "__main__":
