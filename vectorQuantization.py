@@ -689,49 +689,6 @@ class VectorQuantization:
     def get_class_list(self):
         return self.class_list
 
-    def CNN_data_split(self):
-        root_dir = self.root
-        train_dir = "/Users/dongyoonhahm/KAIST/CS485/cw2/RF_code/train"
-        val_dir = "/Users/dongyoonhahm/KAIST/CS485/cw2/RF_code/val"
-        test_dir = "/Users/dongyoonhahm/KAIST/CS485/cw2/RF_code/test"
-
-        for class_folder in os.listdir(root_dir):
-            class_path = os.path.join(root_dir, class_folder)
-            if not os.path.isdir(class_path):
-                continue
-
-            images = [img for img in os.listdir(class_path) if img.endswith(".jpg")]
-            random.shuffle(images)
-            train_images = images[: self.img_sel[0]]
-            val_images = images[self.img_sel[0] : self.img_sel[0] + self.img_sel[1]]
-            test_images = images[
-                self.img_sel[0]
-                + self.img_sel[1] : self.img_sel[0]
-                + self.img_sel[1]
-                + self.img_sel[2]
-            ]
-            train_class_path = os.path.join(train_dir, class_folder)
-            val_class_path = os.path.join(val_dir, class_folder)
-            test_class_path = os.path.join(test_dir, class_folder)
-            os.makedirs(train_class_path, exist_ok=True)
-            os.makedirs(val_class_path, exist_ok=True)
-            os.makedirs(test_class_path, exist_ok=True)
-
-            for img in train_images:
-                src_path = os.path.join(class_path, img)
-                dst_path = os.path.join(train_class_path, img)
-                shutil.copy(src_path, dst_path)
-
-            for img in val_images:
-                src_path = os.path.join(class_path, img)
-                dst_path = os.path.join(val_class_path, img)
-                shutil.copy(src_path, dst_path)
-
-            for img in test_images:
-                src_path = os.path.join(class_path, img)
-                dst_path = os.path.join(test_class_path, img)
-                shutil.copy(src_path, dst_path)
-
 
 def load_from_file(vq_path="vectorQuantization.pkl"):
     """
