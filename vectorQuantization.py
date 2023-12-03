@@ -305,6 +305,15 @@ class VectorQuantization:
         return hists
 
     def get_descriptor(self, image_path):
+        """
+        Get the SIFT descriptor of an image.
+
+        Args:
+            image_path (str): The path of the image.
+
+        Returns:
+            desc (np.array): The descriptor of the image. shape of (num_of_desc, 128).
+        """
         if os.path.exists(image_path):
             image = cv.imread(image_path)
             if image.shape[2] == 3:
@@ -444,6 +453,47 @@ class VectorQuantization:
 
         # Display the entire figure
         plt.show()
+
+    @property
+    def vocab(self):
+        return self.vocab
+
+    @property
+    def vocab_size(self):
+        return self.vocab_size
+
+    def get_train_histograms(self):
+        return self.train_histograms
+
+    def get_test_histograms(self):
+        return self.test_histograms
+
+    def get_train_labels(self):
+        return self.train_labels_list
+
+    def get_test_labels(self):
+        return self.test_labels_list
+
+    def get_train_images(self):
+        return self.train_images_list
+
+    def get_test_images(self):
+        return self.test_images_list
+
+    def get_train_images_dict(self):
+        return self.train_images
+
+    def get_test_images_dict(self):
+        return self.test_images
+
+    def get_train_histograms_dict(self):
+        return self.train_histograms_dict
+
+    def get_test_histograms_dict(self):
+        return self.test_histograms_dict
+
+    def get_class_list(self):
+        return self.class_list
 
     def CNN_data_split(self):
         root_dir = self.root
