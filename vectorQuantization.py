@@ -303,13 +303,25 @@ class VectorQuantization:
         """
         Construct histogram of train set.
         """
+        if self.use_RF_codebook:
+            if self.vq_forest is None:
+                print(
+                    "Codebook is not constructed. Please run construct_RF_codebook()."
+                )
+                return
+            else:
+                self.construct_train_histograms_RF()
 
-        if self.vocab is None:
-            print(
-                "Codebook is not constructed. Please run construct_kmeans_codebook()."
-            )
-            return
+        else:
+            if self.vocab is None:
+                print(
+                    "Codebook is not constructed. Please run construct_kmeans_codebook()."
+                )
+                return
+            else:
+                self.construct_train_histograms_kmeans()
 
+    def construct_train_histograms_kmeans(self):
         print("Constructing histogram of train set...")
         self.train_histograms = []
         self.train_histograms_dict = {}
@@ -317,7 +329,7 @@ class VectorQuantization:
         for i, image in enumerate(self.train_images_list):
             image_path = os.path.join(image)
             descriptor = self.get_descriptor(image_path)
-            histogram = self.construct_histogram(descriptor)
+            histogram = self.construct_histogram_kmeans(descriptor)
 
             cls = self.train_labels_list[i]
             if cls not in self.train_histograms_dict:
@@ -330,6 +342,47 @@ class VectorQuantization:
             "Constructed histogram of train set. Shape: ", self.train_histograms.shape
         )
         return self.train_histograms
+
+    def construct_train_histograms_RF(self):
+        print("Constructing histogram of train set...")
+        self.train_histograms = []
+        self.train_histograms_dict = {}
+
+        for i, image in enumerate(self.train_images_list):
+            image_path = os.path.join(image)
+            descriptor = self.get_descriptor(image_path)
+            histogram = self.construct_histogram_RF(descriptor)
+
+            cls = self.train_labels_list[i]
+            if cls not in self.train_histograms_dict:
+                self.train_histograms_dict[cls] = []
+            self.train_histograms_dict[cls].append(histogram)
+            self.train_histograms.append(histogram)
+
+        self.train_histograms = np.stack(self.train_histograms, axis=0)
+        print(
+            "Constructed histogram of train set. Shape: ", self.train_histograms.shape
+        )
+        return self.train_histograms
+
+    def construct_histogram_RF(self, descriptor):
+        """
+        Constructs the histogram of an image using the Random Forest codebook.
+
+        Args:
+            descriptors (np.array): The descriptors of an image. shape of (num_of_desc, 128).
+
+        Returns:
+            histogram (np.array): The histogram of the image. shape of (vocab_size,).
+        """
+        if self.vq_forest is None:
+            print("Codebook is not constructed. Please run construct_RF_codebook().")
+            return
+
+        codewords = self.vq_forest.apply(descriptor)  # (num_of_desc, vocab_size)
+        histogram = np.sum(codewords, axis=0)  # (,vocab_size,)
+        print(histogram.shape)
+        return histogram
 
     def construct_test_histograms(self):
         """
@@ -347,7 +400,7 @@ class VectorQuantization:
         self.test_histograms_dict = {}
         for i, image in enumerate(self.test_images_list):
             descriptor = self.get_descriptor(image)
-            histogram = self.construct_histogram(descriptor)
+            histogram = self.construct_histogram_kmeans(descriptor)
 
             cls = self.test_labels_list[i]
 
@@ -375,7 +428,7 @@ class VectorQuantization:
         sift = cv.SIFT_create()
         for image_path in image_paths:
             descriptor = self.get_descriptor(image_path, sift=sift)
-            histogram = self.construct_histogram(descriptor)
+            histogram = self.construct_histogram_kmeans(descriptor)
             hists.append(histogram)
 
         hists = np.concatenate(hists, axis=0)
@@ -476,7 +529,7 @@ class VectorQuantization:
 
         return codeword
 
-    def construct_histogram(self, descriptors):
+    def construct_histogram_kmeans(self, descriptors):
         """
         Constructs the histogram of an image.
 
