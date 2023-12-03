@@ -404,22 +404,6 @@ class VectorQuantization:
         print("Constructing histogram of train set...")
         # Need to construct train_set as (num_images, num_of_desc, 128)
 
-    def RF_codebook(self, vocab_size=64):
-        ### load variables
-        self.vocab_size = vocab_size
-        img_list = self.img_list
-        img_idx_train = self.img_idx_train
-        img_idx_test = self.img_idx_test
-        descs_train = self.descs_train
-        descs_train_label = self.descs_train_label
-        descs_dic_train = self.descs_dic_train
-        descs_test = self.descs_test
-        descs_dic_test = self.descs_dic_test
-        descs_test_label = self.descs_test_label
-
-        rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
-        rf_classifier.fit(descs_train, descs_train_label)
-
     def visualization(self, dataset="train", cls="water_lilly", idx=0):
         """
         Visualize the image and its histogram.
