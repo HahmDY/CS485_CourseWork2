@@ -11,7 +11,7 @@ from time import time
 
 
 class VectorQuantization:
-    def __init__(self, datadir, train_num=15, test_num=15):
+    def __init__(self, datadir, train_num=15, test_num=15, use_RF_codebook=False):
         # self.root = root
         # self.class_list = None
         # self.img_list = None
@@ -33,12 +33,12 @@ class VectorQuantization:
         # self.histogram_te = None
 
         ############# dataset #############
-        self.data_dir = None  # data directory
+        self.data_dir = datadir  # data directory
 
         self.class_list = None  # list of class names
         self.image_dataset = None  # dictionary of image names. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
-        self.train_images = None  # dictionary of train images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
-        self.test_images = None  # dictionary of test images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
+        self.train_images_dict = None  # dictionary of train images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
+        self.test_images_dict = None  # dictionary of test images. {key: class name, value: list of image names.} e.g. {'water_lilly': ['image_0001.jpg', 'image_0002.jpg', ...], ...}
         self.img_idx_train = None  # dictionary of image index of train set. {key: class name, value: image index.} e.g. {'water_lilly': [0, 1, 2, ...], ...}
         self.img_idx_test = None  # dictionary of image index of test set. {key: class name, value: image index.} e.g. {'water_lilly': [0, 1, 2, ...], ...}
 
@@ -53,8 +53,6 @@ class VectorQuantization:
         self.vocab_size = 0
         self.vocab = None  # VISUAL WORDS. shape (vocab_size, 128)
 
-        ############# SIFT #############
-        self.sift = cv.SIFT_create()
         ############# histogram #############
         self.train_histograms = (
             None  # histogram of train set. shape of (num_train, vocab_size)
@@ -72,6 +70,8 @@ class VectorQuantization:
         ####################################
 
         self.load_data(datadir)
+
+        self.use_RF_codebook = use_RF_codebook
 
     def save_as_file(self, export_path="vectorQuantization.pkl"):
         """
@@ -142,14 +142,20 @@ class VectorQuantization:
                 self.train_num : self.train_num + self.test_num
             ]
 
-        train_images = {}
-        test_images = {}
+        train_images_dict = {}
+        test_images_dict = {}
         for class_folder in class_list:
-            train_images[class_folder] = [
-                image_dataset[class_folder][idx] for idx in img_idx_train[class_folder]
+            train_images_dict[class_folder] = [
+                os.path.join(
+                    self.data_dir, class_folder, image_dataset[class_folder][idx]
+                )
+                for idx in img_idx_train[class_folder]
             ]
-            test_images[class_folder] = [
-                image_dataset[class_folder][idx] for idx in img_idx_test[class_folder]
+            test_images_dict[class_folder] = [
+                os.path.join(
+                    self.data_dir, class_folder, image_dataset[class_folder][idx]
+                )
+                for idx in img_idx_test[class_folder]
             ]
 
         # Listify the dataset
@@ -160,13 +166,11 @@ class VectorQuantization:
         test_labels_list = []
 
         for class_folder in class_list:
-            for image_name in train_images[class_folder]:
-                image_path = os.path.join(data_dir, class_folder, image_name)
+            for image_path in train_images_dict[class_folder]:
                 train_images_list.append(image_path)
                 train_labels_list.append(class_folder)
 
-            for image_name in test_images[class_folder]:
-                image_path = os.path.join(data_dir, class_folder, image_name)
+            for image_path in test_images_dict[class_folder]:
                 test_images_list.append(image_path)
                 test_labels_list.append(class_folder)
 
@@ -185,8 +189,8 @@ class VectorQuantization:
         self.data_dir = data_dir
         self.class_list = class_list
         self.image_dataset = image_dataset
-        self.train_images = train_images
-        self.test_images = test_images
+        self.train_images_dict = train_images_dict
+        self.test_images_dict = test_images_dict
         self.img_idx_train = img_idx_train
         self.img_idx_test = img_idx_test
 
@@ -250,6 +254,13 @@ class VectorQuantization:
                 "Codebook is not constructed. Please run construct_kmeans_codebook()."
             )
             return
+        if os.path.exists(export_path):
+            print("File already exists.")
+            ans = input("Do you want to overwrite? (y/n)")
+            if ans != "y":
+                return
+        if not os.path.exists(export_path):
+            os.makedirs(os.path.dirname(export_path), exist_ok=True)
 
         np.save(export_path, self.vocab)
 
@@ -264,20 +275,20 @@ class VectorQuantization:
         print("Start computing SIFT descriptors...")
 
         descriptors = []
+        descriptor_labels = []  # needed if using RF codebook
         num_desc = 0
 
         tqdm_bar = tqdm(
             total=len(self.train_images_list),
             desc="Computing SIFT descriptors. The number of images loaded:",
         )
-
+        sift = cv.SIFT_create()
         for class_folder in self.class_list:
-            for image_name in self.train_images[class_folder]:
-                image_path = os.path.join(self.data_dir, class_folder, image_name)
+            for image_path in self.train_images_dict[class_folder]:
                 image = cv.imread(image_path)
                 if image.shape[2] == 3:
                     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-                _, desc = self.sift.detectAndCompute(image, None)
+                _, desc = sift.detectAndCompute(image, None)
                 descriptors.append(desc)
                 num_desc += desc.shape[0]
                 tqdm_bar.update(1)
@@ -291,7 +302,11 @@ class VectorQuantization:
 
         # construct codebook
         self.vocab_size = vocab_size
-        self.construct_kmeans_codebook(vocab_size, descriptors)
+        if self.use_RF_codebook:
+            print("Constructing codebook using Random Forest...")
+            self.construct_RF_codebook(vocab_size, descriptors)
+        else:
+            self.construct_kmeans_codebook(vocab_size, descriptors)
 
     def construct_train_histograms(self):
         """
@@ -338,15 +353,16 @@ class VectorQuantization:
 
         print("Constructing histogram of test set...")
         self.test_histograms = []
-        self.histogram_test_dict = {}
+        self.test_histograms_dict = {}
         for i, image in enumerate(self.test_images_list):
             descriptor = self.get_descriptor(image)
             histogram = self.construct_histogram(descriptor)
 
             cls = self.test_labels_list[i]
-            if cls not in self.histogram_test_dict:
-                self.histogram_test_dict[cls] = []
-            self.histogram_test_dict[cls].append(histogram)
+
+            if cls not in self.test_histograms_dict:
+                self.test_histograms_dict[cls] = []
+            self.test_histograms_dict[cls].append(histogram)
             self.test_histograms.append(histogram)
 
         self.test_histograms = np.stack(self.test_histograms, axis=0)
@@ -365,15 +381,16 @@ class VectorQuantization:
 
         """
         hists = []
+        sift = cv.SIFT_create()
         for image_path in image_paths:
-            descriptor = self.get_descriptor(image_path)
+            descriptor = self.get_descriptor(image_path, sift=sift)
             histogram = self.construct_histogram(descriptor)
             hists.append(histogram)
 
         hists = np.concatenate(hists, axis=0)
         return hists
 
-    def get_descriptor(self, image_path):
+    def get_descriptor(self, image_path, sift=None):
         """
         Get the SIFT descriptor of an image.
 
@@ -383,12 +400,38 @@ class VectorQuantization:
         Returns:
             desc (np.array): The descriptor of the image. shape of (num_of_desc, 128).
         """
+        if sift is None:
+            sift = cv.SIFT_create()
+
         if os.path.exists(image_path):
             image = cv.imread(image_path)
             if image.shape[2] == 3:
                 image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-            _, desc = self.sift.detectAndCompute(image, None)
+            _, desc = sift.detectAndCompute(image, None)
             return desc
+
+    def construct_RF_codebook(
+        self, vocab_size=200, descriptors=None, descriptors_label=None
+    ):
+        """
+        Creates a codebook using Random Forest and the SIFT descriptors of the training set.
+
+        Args:
+            vocab_size (int): The size of the codebook.
+            descriptors (np.array): The descriptors of an image. shape of (num_of_desc, 128).
+            descriptors_label (np.array): The labels of the descriptors. shape of (num_of_desc,).
+
+
+        """
+
+        print("Start constructing Random Forest codebook...")
+        self.vocab_size = vocab_size
+        start = time()
+        self.vq_forest = RandomForestClassifier(max_leaf_nodes=self.vocab_size)
+        self.vq_forest.fit(descriptors, descriptors_label)
+        end = time()
+        print(f"Time taken constructing Random Forest codebook: {end-start:.2f}s")
+        print("The RF codebook is constructed. You can now encode image with it.")
 
     def construct_kmeans_codebook(self, vocab_size=200, decriptors=None):
         """
@@ -498,10 +541,11 @@ class VectorQuantization:
 
         # get index of image and histogram
         if dataset == "train":
-            img_path = os.path.join(self.data_dir, cls, self.train_images[cls][idx])
+            img_path = self.train_images_dict[cls][idx]
+
             histogram = self.train_histograms_dict[cls][idx]
         elif dataset == "test":
-            img_path = os.path.join(self.data_dir, cls, self.test_images[cls][idx])
+            img_path = self.test_images_dict[cls][idx]
             histogram = self.test_histograms_dict[cls][idx]
         else:
             print("Invalid dataset.")
@@ -542,10 +586,10 @@ class VectorQuantization:
         return self.test_images_list
 
     def get_train_images_dict(self):
-        return self.train_images
+        return self.train_images_dict
 
     def get_test_images_dict(self):
-        return self.test_images
+        return self.test_images_dict
 
     def get_train_histograms_dict(self):
         return self.train_histograms_dict
