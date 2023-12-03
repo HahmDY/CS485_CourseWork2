@@ -6,6 +6,7 @@ from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 import shutil
+import time
 
 class DataHandler():
     
@@ -13,6 +14,8 @@ class DataHandler():
         self.root = root
         self.class_list = None
         self.img_list = None
+        
+        self.time = None
         
         self.vocab_size = 0
         self.img_idx_tr = None
@@ -105,7 +108,9 @@ class DataHandler():
         
         ### voabulary construction
         print("Clustering...")  
+        start_time = time.time()
         kmeans = KMeans(n_clusters=self.vocab_size, random_state=0, n_init=5).fit(descs_tr)
+        self.time = time.time() - start_time
         vocab = kmeans.cluster_centers_
         print("Shape of vocab: ", vocab.shape, "(vocab_size, 128)")
         squares_centers = np.sum(vocab**2, axis=1)
