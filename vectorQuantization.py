@@ -290,6 +290,9 @@ class VectorQuantization:
                     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
                 _, desc = sift.detectAndCompute(image, None)
                 descriptors.append(desc)
+                if self.use_RF_codebook:
+                    descriptor_labels.append(class_folder * np.ones((desc.shape[0],)))
+
                 num_desc += desc.shape[0]
                 tqdm_bar.update(1)
                 if num_desc >= total_descriptors:
@@ -299,12 +302,15 @@ class VectorQuantization:
 
         descriptors = np.concatenate(descriptors, axis=0)
         print("Shape of descriptors: ", descriptors.shape)
+        if self.use_RF_codebook:
+            descriptor_labels = np.concatenate(descriptor_labels, axis=0)
+            print("Shape of descriptor_labels: ", descriptor_labels.shape)
 
         # construct codebook
         self.vocab_size = vocab_size
         if self.use_RF_codebook:
             print("Constructing codebook using Random Forest...")
-            self.construct_RF_codebook(vocab_size, descriptors)
+            self.construct_RF_codebook(vocab_size, descriptors, descriptor_labels)
         else:
             self.construct_kmeans_codebook(vocab_size, descriptors)
 
