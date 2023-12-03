@@ -408,6 +408,12 @@ class VectorQuantization:
                 self.construct_test_histograms_kmeans()
 
     def construct_test_histograms_kmeans(self):
+        """
+        Constructs the histogram of an image using the k-means codebook.
+
+        Returns:
+            histogram (np.array): The histogram of the image. shape of (vocab_size,).
+        """
         print("Constructing histogram of test set...")
         self.test_histograms = []
         self.test_histograms_dict = {}
@@ -428,6 +434,11 @@ class VectorQuantization:
         return self.test_histograms
 
     def construct_test_histograms_RF(self):
+        """
+        Constructs the histogram of an image using the Random Forest codebook.
+
+
+        """
         print("Constructing histogram of test set...")
         self.test_histograms = []
         self.test_histograms_dict = {}
