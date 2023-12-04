@@ -11,9 +11,16 @@ from time import time
 
 
 class VectorQuantization:
-    def __init__(self, datadir, train_num=15, test_num=15, use_RF_codebook=False):
-        self.vocab = None  # VISUAL WORDS. shape (vocab_size, 128)
-
+    def __init__(
+        self,
+        datadir,
+        vocab_size,
+        train_num=15,
+        test_num=15,
+        use_RF_codebook=False,
+        vq_n_estimators=10,
+        rf_keyword_args={},
+    ):
         ############# dataset #############
         self.data_dir = datadir  # data directory
 
@@ -32,7 +39,7 @@ class VectorQuantization:
         self.train_num = train_num
         self.test_num = test_num
         ############# codebook #############
-        self.vocab_size = 0
+        self.vocab_size = vocab_size
         self.vocab = None  # VISUAL WORDS. shape (vocab_size, 128)
 
         ############# histogram #############
@@ -51,12 +58,14 @@ class VectorQuantization:
         )  # Dictionary of histogram of test set. {key: class name, value: histogram of test set. shape of (num_test_per_class, vocab_size)}
         ####################################
 
-        self.load_data(datadir)
-
         ############# RF codebook #############
-        self.use_RF_codebook = use_RF_codebook
+        self.use_RF_codebook = use_RF_codebook  # whether to use RF codebook or not
         self.vq_forest = None  # Random Forest for codebook
+        self.vq_n_estimators = vq_n_estimators  # The number of trees in the forest.
+        self.vq_forest_max_depth = None  # The maximum depth of the tree.
+        self.rf_keyword_args = rf_keyword_args  # keyword arguments for Random Forest
         ######################################
+        self.load_data(datadir)
 
     def save_as_file(self, export_path="vectorQuantization.pkl"):
         """
@@ -249,12 +258,11 @@ class VectorQuantization:
 
         np.save(export_path, self.vocab)
 
-    def fit_codebook(self, vocab_size=200, total_descriptors=100000):
+    def fit_codebook(self, total_descriptors=100000):
         # check if the data is loaded
         if self.class_list is None:
             print("Data is not loaded. Please run load_data() first.")
             return
-        self.vocab_size = vocab_size
 
         # compute SIFT descriptors. Due to the memory issues, limit the total number of descriptors to total_descriptor (100,000 default).
         print("Start computing SIFT descriptors...")
@@ -267,6 +275,13 @@ class VectorQuantization:
             total=len(self.train_images_list),
             desc="Computing SIFT descriptors. The number of images loaded:",
         )
+
+        # if self.use_RF_codebook:
+        #     print("Using Random Forest codebook. Use more dense descriptors.")
+        #     sift = cv.SIFT_create(
+        #         contrastThreshold=0.01, edgeThreshold=5
+        #     )  # default: contrastThreshold=0.04, edgeThreshold=10
+        # else:
         sift = cv.SIFT_create()
         for class_folder in self.class_list:
             for image_path in self.train_images_dict[class_folder]:
@@ -276,7 +291,9 @@ class VectorQuantization:
                 _, desc = sift.detectAndCompute(image, None)
                 descriptors.append(desc)
                 if self.use_RF_codebook:
-                    descriptor_labels.append(class_folder * np.ones((desc.shape[0],)))
+                    descriptor_labels.append(
+                        np.full(desc.shape[0], self.class_list.index(class_folder))
+                    )
 
                 num_desc += desc.shape[0]
                 tqdm_bar.update(1)
@@ -292,12 +309,12 @@ class VectorQuantization:
             print("Shape of descriptor_labels: ", descriptor_labels.shape)
 
         # construct codebook
-        self.vocab_size = vocab_size
+
         if self.use_RF_codebook:
             print("Constructing codebook using Random Forest...")
-            self.construct_RF_codebook(vocab_size, descriptors, descriptor_labels)
+            self.construct_RF_codebook(descriptors, descriptor_labels)
         else:
-            self.construct_kmeans_codebook(vocab_size, descriptors)
+            self.construct_kmeans_codebook(descriptors)
 
     def construct_train_histograms(self):
         """
@@ -380,8 +397,24 @@ class VectorQuantization:
             return
 
         codewords = self.vq_forest.apply(descriptor)  # (num_of_desc, vocab_size)
-        histogram = np.sum(codewords, axis=0)  # (,vocab_size,)
-        print(histogram.shape)
+        # one hot encoding for each tree
+        codewords_one_hot = np.zeros(
+            (codewords.shape[0], self.vq_n_estimators * (2**self.vq_forest_max_depth))
+        )
+
+        for i in range(descriptor.shape[0]):
+            starting_of_j_th_tree = 0
+            for j in range(self.vq_n_estimators):
+                codewords_one_hot[
+                    i,
+                    starting_of_j_th_tree
+                    + codewords[i, j]
+                    - (2**self.vq_forest_max_depth - 1),
+                ] = 1
+                starting_of_j_th_tree += 2**self.vq_forest_max_depth
+
+        histogram = np.sum(codewords_one_hot, axis=0)  # (,vocab_size,)
+
         return histogram
 
     def construct_test_histograms(self):
@@ -499,9 +532,7 @@ class VectorQuantization:
             _, desc = sift.detectAndCompute(image, None)
             return desc
 
-    def construct_RF_codebook(
-        self, vocab_size=200, descriptors=None, descriptors_label=None
-    ):
+    def construct_RF_codebook(self, descriptors=None, descriptors_label=None):
         """
         Creates a codebook using Random Forest and the SIFT descriptors of the training set.
 
@@ -514,15 +545,33 @@ class VectorQuantization:
         """
 
         print("Start constructing Random Forest codebook...")
-        self.vocab_size = vocab_size
+
+        self.vq_forest_max_depth = int(np.log2(self.vocab_size / self.vq_n_estimators))
+        print(
+            f"Max depth of each tree: {self.vq_forest_max_depth}, # of trees: {self.vq_n_estimators}, total number of leaves: {2**self.vq_forest_max_depth * self.vq_n_estimators}"
+        )
+
         start = time()
-        self.vq_forest = RandomForestClassifier(max_leaf_nodes=self.vocab_size)
+
+        self.vq_forest = RandomForestClassifier(
+            n_estimators=self.vq_n_estimators,
+            max_depth=self.vq_forest_max_depth,
+            random_state=0,
+            **self.rf_keyword_args,
+        )
         self.vq_forest.fit(descriptors, descriptors_label)
         end = time()
+
+        self.vq_forest_num_leaves = []
+        for i in range(self.vq_n_estimators):
+            leaves_i = self.vq_forest.estimators_[i].get_n_leaves()
+            self.vq_forest_num_leaves.append(leaves_i)
+
         print(f"Time taken constructing Random Forest codebook: {end-start:.2f}s")
+        print(f"Total number of codewords: {sum(self.vq_forest_num_leaves)}")
         print("The RF codebook is constructed. You can now encode image with it.")
 
-    def construct_kmeans_codebook(self, vocab_size=200, decriptors=None):
+    def construct_kmeans_codebook(self, decriptors=None):
         """
         Creates a codebook using KMeans clustering and the SIFT descriptors of the training set.
 
@@ -532,7 +581,7 @@ class VectorQuantization:
         """
 
         print("Start constructing k-means codebook...")
-        self.vocab_size = vocab_size
+
         kmeans = KMeans(n_clusters=self.vocab_size, random_state=0, n_init=5)
         start = time()
         kmeans.fit(decriptors)
