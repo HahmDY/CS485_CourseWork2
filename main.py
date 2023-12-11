@@ -2,7 +2,7 @@ import os
 import cv2 as cv
 import numpy as np
 import random
-from vectorQuantization import VectorQuantization
+from vectorQuantization import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
 from matplotlib import pyplot as plt
@@ -26,7 +26,10 @@ def main():
     # visualize
     cls = "water_lilly"  # ['water_lilly', 'trilobite', 'wild_cat', 'wrench', 'wheelchair', 'yin_yang', 'umbrella', 'watch', 'windsor_chair', 'tick'
     idx = 5  # 0~14
-    vq_new.visualization("train", cls, idx)
+    vq_new.visualization("test", cls, idx)
+
+    vq_new.save_as_file("./vq/vq.pkl")
+    vq_new_new = load_from_file("./vq/vq.pkl")
 
     # train RF
     train_X = vq_new.get_test_histograms()

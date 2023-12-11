@@ -9,6 +9,10 @@ import shutil
 from tqdm import tqdm
 from time import time
 
+# SIFT_Thresholds
+# contrastThreshold = 0.02
+# edgeThreshold = 10
+
 
 class VectorQuantization:
     def __init__(
@@ -20,6 +24,8 @@ class VectorQuantization:
         use_RF_codebook=False,
         vq_n_estimators=10,
         rf_keyword_args={},
+        contrastThreshold=0.04,
+        edgeThreshold=10,
     ):
         ############# dataset #############
         self.data_dir = datadir  # data directory
@@ -56,8 +62,9 @@ class VectorQuantization:
         self.test_histograms_dict = (
             {}
         )  # Dictionary of histogram of test set. {key: class name, value: histogram of test set. shape of (num_test_per_class, vocab_size)}
-        ####################################
-
+        ############SIFT################
+        self.contrastThreshold = contrastThreshold
+        self.edgeThreshold = edgeThreshold
         ############# RF codebook #############
         self.use_RF_codebook = use_RF_codebook  # whether to use RF codebook or not
         self.vq_forest = None  # Random Forest for codebook
@@ -282,13 +289,19 @@ class VectorQuantization:
         #         contrastThreshold=0.01, edgeThreshold=5
         #     )  # default: contrastThreshold=0.04, edgeThreshold=10
         # else:
-        sift = cv.SIFT_create()
+        sift = cv.SIFT_create(
+            contrastThreshold=self.contrastThreshold, edgeThreshold=self.edgeThreshold
+        )
         for class_folder in self.class_list:
             for image_path in self.train_images_dict[class_folder]:
                 image = cv.imread(image_path)
                 if image.shape[2] == 3:
                     image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
                 _, desc = sift.detectAndCompute(image, None)
+                if desc is None:
+                    # print(" No descriptor is found.")
+                    # Actually this should not happen.
+                    return False
                 descriptors.append(desc)
                 if self.use_RF_codebook:
                     descriptor_labels.append(
@@ -301,7 +314,9 @@ class VectorQuantization:
                     print(f"Total number of descriptors: {num_desc}")
                     break
         tqdm_bar.close()
-
+        if descriptors == []:
+            print("No descriptors are found.")
+            return False  # fail
         descriptors = np.concatenate(descriptors, axis=0)
         print("Shape of descriptors: ", descriptors.shape)
         if self.use_RF_codebook:
@@ -315,6 +330,8 @@ class VectorQuantization:
             self.construct_RF_codebook(descriptors, descriptor_labels)
         else:
             self.construct_kmeans_codebook(descriptors)
+
+        return True  # success
 
     def construct_train_histograms(self):
         """
@@ -365,9 +382,16 @@ class VectorQuantization:
         self.train_histograms = []
         self.train_histograms_dict = {}
 
+        image_ind__wo_descriptor = []
         for i, image in enumerate(self.train_images_list):
             image_path = os.path.join(image)
             descriptor = self.get_descriptor(image_path)
+            if descriptor is None:
+                print("No descriptor is found.")
+                # print("descriptor shape: ", descriptor.shape)
+                image_ind__wo_descriptor.append(image_path)
+
+                continue
             histogram = self.construct_histogram_RF(descriptor)
 
             cls = self.train_labels_list[i]
@@ -380,6 +404,13 @@ class VectorQuantization:
         print(
             "Constructed histogram of train set. Shape: ", self.train_histograms.shape
         )
+        for i in image_ind__wo_descriptor:
+            self.train_images_list = np.delete(
+                self.train_images_list, np.where(self.train_images_list == i)
+            )
+            self.train_labels_list = np.delete(
+                self.train_labels_list, np.where(self.train_labels_list == i)
+            )
         return self.train_histograms
 
     def construct_histogram_RF(self, descriptor):
@@ -476,9 +507,15 @@ class VectorQuantization:
         self.test_histograms = []
         self.test_histograms_dict = {}
 
+        image_ind__wo_descriptor = []
         for i, image in enumerate(self.test_images_list):
             image_path = os.path.join(image)
             descriptor = self.get_descriptor(image_path)
+            if descriptor is None:
+                print("No descriptor is found.")
+                # print("descriptor shape: ", descriptor.shape)
+                image_ind__wo_descriptor.append(image_path)
+                continue
             histogram = self.construct_histogram_RF(descriptor)
 
             cls = self.test_labels_list[i]
@@ -486,6 +523,14 @@ class VectorQuantization:
                 self.test_histograms_dict[cls] = []
             self.test_histograms_dict[cls].append(histogram)
             self.test_histograms.append(histogram)
+
+        for i in image_ind__wo_descriptor:
+            self.test_images_list = np.delete(
+                self.test_images_list, np.where(self.test_images_list == i)
+            )
+            self.test_labels_list = np.delete(
+                self.test_labels_list, np.where(self.test_labels_list == i)
+            )
 
         self.test_histograms = np.stack(self.test_histograms, axis=0)
         print("Constructed histogram of test set. Shape: ", self.test_histograms.shape)
@@ -503,7 +548,9 @@ class VectorQuantization:
 
         """
         hists = []
-        sift = cv.SIFT_create()
+        sift = cv.SIFT_create(
+            contrastThreshold=self.contrastThreshold, edgeThreshold=self.edgeThreshold
+        )
         for image_path in image_paths:
             descriptor = self.get_descriptor(image_path, sift=sift)
             histogram = self.construct_histogram_kmeans(descriptor)
@@ -523,7 +570,10 @@ class VectorQuantization:
             desc (np.array): The descriptor of the image. shape of (num_of_desc, 128).
         """
         if sift is None:
-            sift = cv.SIFT_create()
+            sift = cv.SIFT_create(
+                contrastThreshold=self.contrastThreshold,
+                edgeThreshold=self.edgeThreshold,
+            )
 
         if os.path.exists(image_path):
             image = cv.imread(image_path)
